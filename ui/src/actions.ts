@@ -113,10 +113,18 @@ export async function applyEdit(tableId: number, op: EditOp): Promise<boolean> {
   }
 }
 
+/** Creates the sort or filter view of a tab again (after rows were added or deleted). */
+export async function refreshView(tableId: number) {
+  const tab = useStore.getState().tabs.find((x) => x.tableId === tableId);
+  if (tab?.viewSpec) await setView(tableId, tab.viewSpec);
+  else useStore.getState().bump(tableId);
+}
+
 export async function undo(tableId = activeTable()) {
   if (tableId == null) return;
   try {
     useStore.getState().setMeta(await api.undo(tableId));
+    await refreshView(tableId);
   } catch (e) {
     showError(e);
   }
@@ -126,6 +134,7 @@ export async function redo(tableId = activeTable()) {
   if (tableId == null) return;
   try {
     useStore.getState().setMeta(await api.redo(tableId));
+    await refreshView(tableId);
   } catch (e) {
     showError(e);
   }
@@ -411,7 +420,7 @@ export async function runSql(text: string) {
     const changed = new Set(all.filter((r) => r.kind === "changed").map((r) => (r as { tableId: number }).tableId));
     for (const id of changed) {
       await refreshMeta(id);
-      useStore.getState().bump(id);
+      await refreshView(id);
     }
     if (changed.size) await refreshSources();
   }

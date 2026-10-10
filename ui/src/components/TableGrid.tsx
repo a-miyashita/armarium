@@ -1,7 +1,7 @@
 // The data grid of a table tab (03. UI, section 3.2).
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { applyEdit, changeColumn, insertColumn, renameColumn, setView } from "../actions";
+import { applyEdit, changeColumn, insertColumn, refreshView, renameColumn, setView } from "../actions";
 import { api } from "../api";
 import type { LogicalType } from "../bindings/LogicalType";
 import type { ViewSpec } from "../bindings/ViewSpec";
@@ -32,11 +32,7 @@ export function TableGrid({ tableId }: { tableId: number }) {
     [tableId, viewId],
   );
 
-  const afterRowChange = useCallback(async () => {
-    const tb = useStore.getState().tabs.find((x) => x.tableId === tableId);
-    if (tb?.viewSpec) await setView(tableId, tb.viewSpec);
-    useStore.getState().bump(tableId);
-  }, [tableId]);
+  const afterRowChange = useCallback(() => refreshView(tableId), [tableId]);
 
   const bindSelection = useCallback((get: () => Promise<number[]>) => {
     selectedRows.current = get;

@@ -880,7 +880,7 @@ impl Inner {
         let task = format!("load:{id}");
         let last = std::cell::Cell::new(Instant::now());
         let progress = |done: u64, total: Option<u64>| {
-            if last.get().elapsed() > Duration::from_millis(100) {
+            if total != Some(done) && last.get().elapsed() > Duration::from_millis(100) {
                 last.set(Instant::now());
                 sink.emit(CoreEvent::Progress {
                     task: task.clone(),
@@ -902,6 +902,12 @@ impl Inner {
                 Err(CoreError::Internal("an Excel table needs a sheet".into()))
             }
         };
+        // The read ended (also after an error): the UI hides the progress.
+        self.sink.emit(CoreEvent::Progress {
+            task: format!("load:{id}"),
+            done: 1,
+            total: Some(1),
+        });
         // Forget the old data and views of the table.
         let old_views: Vec<ViewId> = lock(&self.views)
             .iter()
