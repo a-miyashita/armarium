@@ -103,7 +103,7 @@ pub fn column_names(headers: &[String]) -> Vec<String> {
         };
         let name = make_unique(&base, |c| {
             let f = fold(c);
-            used.iter().any(|u| *u == f) || RESERVED_COLUMNS.contains(&f.as_str())
+            used.contains(&f) || RESERVED_COLUMNS.contains(&f.as_str())
         });
         used.push(fold(&name));
         out.push(name);

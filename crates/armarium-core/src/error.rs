@@ -110,9 +110,7 @@ impl From<rusqlite::Error> for CoreError {
                 }
                 _ if text.contains("not authorized") => return CoreError::SqlForbidden(text),
                 rusqlite::ErrorCode::OperationInterrupted => return CoreError::Cancelled,
-                rusqlite::ErrorCode::ConstraintViolation
-                    if text.contains("cannot store") =>
-                {
+                rusqlite::ErrorCode::ConstraintViolation if text.contains("cannot store") => {
                     return CoreError::TypeMismatch(text)
                 }
                 _ => return CoreError::Sql(text),

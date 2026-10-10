@@ -53,14 +53,20 @@ impl Drop for SessionFile {
 
 /// Deletes session files of processes that do not run any more.
 fn cleanup_stale(dir: &Path) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for e in entries.flatten() {
         let name = e.file_name().to_string_lossy().into_owned();
-        let Some(base) = name.strip_suffix(".lock") else { continue };
+        let Some(base) = name.strip_suffix(".lock") else {
+            continue;
+        };
         if !base.starts_with("session-") {
             continue;
         }
-        let Ok(f) = File::options().write(true).open(e.path()) else { continue };
+        let Ok(f) = File::options().write(true).open(e.path()) else {
+            continue;
+        };
         if f.try_lock().is_ok() {
             for suffix in [".db", ".db-wal", ".db-shm"] {
                 let _ = std::fs::remove_file(dir.join(format!("{base}{suffix}")));
@@ -80,7 +86,9 @@ pub struct DbSettings {
 
 impl Default for DbSettings {
     fn default() -> Self {
-        DbSettings { cache_kib: 512 * 1024 }
+        DbSettings {
+            cache_kib: 512 * 1024,
+        }
     }
 }
 
@@ -88,7 +96,9 @@ impl Default for DbSettings {
 pub fn open_write(path: &Path, settings: &DbSettings) -> Result<Connection> {
     let conn = Connection::open_with_flags(
         path,
-        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        OpenFlags::SQLITE_OPEN_READ_WRITE
+            | OpenFlags::SQLITE_OPEN_CREATE
+            | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "synchronous", "OFF")?;
@@ -126,7 +136,9 @@ fn harden(conn: &Connection) -> Result<()> {
 
 /// Registers the Armarium functions (07. SQL, section 5).
 pub fn register_functions(conn: &Connection) -> Result<()> {
-    let flags = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC | FunctionFlags::SQLITE_INNOCUOUS;
+    let flags = FunctionFlags::SQLITE_UTF8
+        | FunctionFlags::SQLITE_DETERMINISTIC
+        | FunctionFlags::SQLITE_INNOCUOUS;
     conn.create_scalar_function("regexp", 2, flags, |ctx| {
         let re = ctx.get_or_create_aux(0, |vr| -> std::result::Result<regex::Regex, BoxError> {
             Ok(regex::Regex::new(vr.as_str()?)?)
@@ -189,7 +201,6 @@ pub fn in_transaction<T>(conn: &Connection, f: impl FnOnce() -> Result<T>) -> Re
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests;

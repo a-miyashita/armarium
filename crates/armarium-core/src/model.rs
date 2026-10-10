@@ -363,7 +363,9 @@ pub struct ViewSpec {
 #[ts(export)]
 pub enum EditOp {
     /// Set cell values. Each value is the text that the user entered (`null` or "" is NULL).
-    SetCells { cells: Vec<CellEdit> },
+    SetCells {
+        cells: Vec<CellEdit>,
+    },
     /// Insert rows. `afterRid: null` inserts at the start.
     #[serde(rename_all = "camelCase")]
     InsertRows {
@@ -393,8 +395,13 @@ pub enum EditOp {
         /// The position in the display order. `null` adds the column at the end.
         position: Option<u32>,
     },
-    DeleteColumn { column: String },
-    RenameColumn { column: String, to: String },
+    DeleteColumn {
+        column: String,
+    },
+    RenameColumn {
+        column: String,
+        to: String,
+    },
     #[serde(rename_all = "camelCase")]
     ChangeColumnType {
         column: String,

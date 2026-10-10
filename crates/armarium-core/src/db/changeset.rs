@@ -107,7 +107,9 @@ unsafe extern "C" fn on_conflict(
     _iter: *mut ffi::sqlite3_changeset_iter,
 ) -> c_int {
     match kind {
-        ffi::SQLITE_CHANGESET_DATA | ffi::SQLITE_CHANGESET_CONFLICT => ffi::SQLITE_CHANGESET_REPLACE,
+        ffi::SQLITE_CHANGESET_DATA | ffi::SQLITE_CHANGESET_CONFLICT => {
+            ffi::SQLITE_CHANGESET_REPLACE
+        }
         ffi::SQLITE_CHANGESET_NOTFOUND => ffi::SQLITE_CHANGESET_OMIT,
         _ => ffi::SQLITE_CHANGESET_ABORT,
     }
@@ -133,7 +135,9 @@ pub fn apply(conn: &Connection, changeset: &[u8]) -> Result<()> {
         let msg = unsafe { std::ffi::CStr::from_ptr(ffi::sqlite3_errmsg(db)) }
             .to_string_lossy()
             .into_owned();
-        return Err(CoreError::Internal(format!("cannot apply the changeset: {msg} (code {rc})")));
+        return Err(CoreError::Internal(format!(
+            "cannot apply the changeset: {msg} (code {rc})"
+        )));
     }
     Ok(())
 }

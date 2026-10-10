@@ -209,7 +209,10 @@ impl Workspace {
 
     /// Finds a source by its path.
     pub fn find_by_path(&self, path: &str) -> Option<&SourceEntry> {
-        self.file.sources.iter().find(|s| fsutil::same_path(&s.path, path))
+        self.file
+            .sources
+            .iter()
+            .find(|s| fsutil::same_path(&s.path, path))
     }
 
     /// All table SQL names in the workspace (folded).
@@ -273,7 +276,8 @@ impl Workspace {
             SourceKind::Excel => {
                 let mut taken = HashSet::new();
                 for sh in sheets.unwrap_or_default() {
-                    let name = self.unique_name(&naming::normalize(&format!("{stem}_{}", sh.name)), &taken);
+                    let name = self
+                        .unique_name(&naming::normalize(&format!("{stem}_{}", sh.name)), &taken);
                     taken.insert(naming::fold(&name));
                     entry.sheets.push(SheetEntry {
                         name: sh.name,
@@ -304,7 +308,12 @@ impl Workspace {
     }
 
     /// Changes the SQL name of a table. Returns the name that Armarium uses.
-    pub fn rename_table(&mut self, id: &str, sheet: Option<&str>, new_name: &str) -> Result<String> {
+    pub fn rename_table(
+        &mut self,
+        id: &str,
+        sheet: Option<&str>,
+        new_name: &str,
+    ) -> Result<String> {
         let name = naming::validate_table_name(new_name)?;
         let current = self.table_sql_name(id, sheet)?;
         let folded = naming::fold(&name);
@@ -345,8 +354,14 @@ impl Workspace {
     }
 
     /// Replaces the read settings of a source or a sheet.
-    pub fn set_options(&mut self, id: &str, sheet: Option<&str>, options: &ReadOptions) -> Result<()> {
-        let new_value = serde_json::to_value(options).map_err(|e| CoreError::Internal(e.to_string()))?;
+    pub fn set_options(
+        &mut self,
+        id: &str,
+        sheet: Option<&str>,
+        options: &ReadOptions,
+    ) -> Result<()> {
+        let new_value =
+            serde_json::to_value(options).map_err(|e| CoreError::Internal(e.to_string()))?;
         let src = self.source_mut(id)?;
         let target = match sheet {
             None => &mut src.options,
@@ -409,7 +424,9 @@ impl Workspace {
         let s = abs.to_string_lossy().into_owned();
         if let Some(other) = self.find_by_path(&s) {
             if other.id != id {
-                return Err(CoreError::InvalidArgument(format!("the file is already registered: {s}")));
+                return Err(CoreError::InvalidArgument(format!(
+                    "the file is already registered: {s}"
+                )));
             }
         }
         self.source_mut(id)?.path = s;
@@ -464,7 +481,12 @@ impl Workspace {
             new_list.insert(i.min(new_list.len()), entry);
         }
         // Keep the order of the workbook.
-        new_list.sort_by_key(|e| sheets.iter().position(|s| s.name == e.name).unwrap_or(usize::MAX));
+        new_list.sort_by_key(|e| {
+            sheets
+                .iter()
+                .position(|s| s.name == e.name)
+                .unwrap_or(usize::MAX)
+        });
         if new_list == src.sheets {
             return Ok(false);
         }
@@ -478,7 +500,8 @@ impl Workspace {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(CoreError::from_io(e, &self.path)),
         };
-        let text = std::fs::read_to_string(&self.path).map_err(|e| CoreError::from_io(e, &self.path))?;
+        let text =
+            std::fs::read_to_string(&self.path).map_err(|e| CoreError::from_io(e, &self.path))?;
         let file: WorkspaceFile = if text.trim().is_empty() {
             WorkspaceFile::default()
         } else {
@@ -540,13 +563,19 @@ impl Workspace {
         };
         merged.version = WORKSPACE_VERSION;
         merged.sources.retain(|s| !self.removed.contains(&s.id));
-        for ours in self.file.sources.iter().filter(|s| self.changed.contains(&s.id)) {
+        for ours in self
+            .file
+            .sources
+            .iter()
+            .filter(|s| self.changed.contains(&s.id))
+        {
             match merged.sources.iter_mut().find(|s| s.id == ours.id) {
                 Some(slot) => *slot = ours.clone(),
                 None => merged.sources.push(ours.clone()),
             }
         }
-        let json = serde_json::to_string_pretty(&merged).map_err(|e| CoreError::Internal(e.to_string()))?;
+        let json = serde_json::to_string_pretty(&merged)
+            .map_err(|e| CoreError::Internal(e.to_string()))?;
         fsutil::atomic_write(&self.path, |w| {
             use std::io::Write;
             w.write_all(json.as_bytes())?;
@@ -580,7 +609,10 @@ mod tests {
         let a = touch(dir.path(), "売上 2026.csv");
         let (id, new) = ws.add_source(&a, None).unwrap();
         assert!(new);
-        assert_eq!(ws.source(&id).unwrap().sql_name.as_deref(), Some("売上_2026"));
+        assert_eq!(
+            ws.source(&id).unwrap().sql_name.as_deref(),
+            Some("売上_2026")
+        );
         let (id2, new2) = ws.add_source(&a, None).unwrap();
         assert_eq!(id, id2);
         assert!(!new2);
@@ -589,15 +621,24 @@ mod tests {
         std::fs::create_dir(&sub).unwrap();
         let b = touch(&sub, "売上-2026.tsv");
         let (idb, _) = ws.add_source(&b, None).unwrap();
-        assert_eq!(ws.source(&idb).unwrap().sql_name.as_deref(), Some("売上_2026_2"));
+        assert_eq!(
+            ws.source(&idb).unwrap().sql_name.as_deref(),
+            Some("売上_2026_2")
+        );
 
         let x = touch(dir.path(), "budget.xlsx");
         let (idx, _) = ws
             .add_source(
                 &x,
                 Some(vec![
-                    SheetListing { name: "2026".into(), hidden: false },
-                    SheetListing { name: "Sheet 1".into(), hidden: true },
+                    SheetListing {
+                        name: "2026".into(),
+                        hidden: false,
+                    },
+                    SheetListing {
+                        name: "Sheet 1".into(),
+                        hidden: true,
+                    },
                 ]),
             )
             .unwrap();
@@ -613,18 +654,17 @@ mod tests {
 
         let ws2 = Workspace::open(dir.path().join("workspace.json")).unwrap();
         assert_eq!(ws2.sources().len(), 3);
-        assert_eq!(ws2.source(&idb).unwrap().sql_name.as_deref(), Some("sales_tsv"));
+        assert_eq!(
+            ws2.source(&idb).unwrap().sql_name.as_deref(),
+            Some("sales_tsv")
+        );
     }
 
     #[test]
     fn merges_changes_of_two_processes_and_keeps_unknown_fields() {
         let dir = tempfile::tempdir().unwrap();
         let wp = dir.path().join("workspace.json");
-        std::fs::write(
-            &wp,
-            r#"{"version":1,"future":{"x":1},"sources":[]}"#,
-        )
-        .unwrap();
+        std::fs::write(&wp, r#"{"version":1,"future":{"x":1},"sources":[]}"#).unwrap();
         let mut a = Workspace::open(&wp).unwrap();
         let mut b = Workspace::open(&wp).unwrap();
         let fa = touch(dir.path(), "a.csv");

@@ -39,7 +39,8 @@ fn dump(conn: &Connection) -> Vec<(i64, i64, String, f64)> {
 
 fn record(conn: &Connection, sql: &str) -> Vec<u8> {
     let rec = Recorder::start(conn, &["sales", "__arm_ord_1"]).unwrap();
-    conn.execute_batch(&format!("BEGIN; {sql}; COMMIT;")).unwrap();
+    conn.execute_batch(&format!("BEGIN; {sql}; COMMIT;"))
+        .unwrap();
     rec.changeset().unwrap()
 }
 
@@ -92,13 +93,20 @@ fn check(conn: &Connection, sb: &Sandbox, sql: &str) -> std::result::Result<Vec<
 fn authorizer_allows_queries_and_dml() {
     let (_d, conn) = setup();
     let sb = Sandbox::install(&conn).unwrap();
-    assert_eq!(check(&conn, &sb, "SELECT * FROM sales WHERE name REGEXP 'a'"), Ok(vec![]));
+    assert_eq!(
+        check(&conn, &sb, "SELECT * FROM sales WHERE name REGEXP 'a'"),
+        Ok(vec![])
+    );
     assert_eq!(
         check(&conn, &sb, "WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM r WHERE n<3) SELECT n FROM r"),
         Ok(vec![])
     );
     assert_eq!(
-        check(&conn, &sb, "SELECT name, sum(id) OVER (ORDER BY id) FROM sales"),
+        check(
+            &conn,
+            &sb,
+            "SELECT name, sum(id) OVER (ORDER BY id) FROM sales"
+        ),
         Ok(vec![])
     );
     assert_eq!(
@@ -106,10 +114,17 @@ fn authorizer_allows_queries_and_dml() {
         Ok(vec!["sales".to_string()])
     );
     assert_eq!(
-        check(&conn, &sb, "UPDATE sales SET name = upper(name) WHERE id > 1 RETURNING *"),
+        check(
+            &conn,
+            &sb,
+            "UPDATE sales SET name = upper(name) WHERE id > 1 RETURNING *"
+        ),
         Ok(vec!["sales".to_string()])
     );
-    assert_eq!(check(&conn, &sb, "DELETE FROM sales"), Ok(vec!["sales".to_string()]));
+    assert_eq!(
+        check(&conn, &sb, "DELETE FROM sales"),
+        Ok(vec!["sales".to_string()])
+    );
     assert!(check(&conn, &sb, "SELECT * FROM json_each('[1,2]')").is_ok());
     assert!(check(&conn, &sb, "EXPLAIN QUERY PLAN SELECT * FROM sales").is_ok());
 }
@@ -179,10 +194,14 @@ fn round_trip_cast_rules() {
     let conn = Connection::open_in_memory().unwrap();
     let ok = |sql: &str| -> bool { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
     assert!(ok("SELECT CAST(CAST('123' AS INTEGER) AS TEXT) = '123'"));
-    assert!(!ok("SELECT CAST(CAST('00123' AS INTEGER) AS TEXT) = '00123'"));
+    assert!(!ok(
+        "SELECT CAST(CAST('00123' AS INTEGER) AS TEXT) = '00123'"
+    ));
     assert!(ok("SELECT CAST(CAST('1.5' AS REAL) AS TEXT) = '1.5'"));
     assert!(!ok("SELECT CAST(CAST('1.50' AS REAL) AS TEXT) = '1.50'"));
     assert!(ok("SELECT CAST(CAST('0.1' AS REAL) AS TEXT) = '0.1'"));
     assert!(ok("SELECT date(julianday('2026-01-02')) = '2026-01-02'"));
-    assert!(ok("SELECT date(julianday('2026-02-30')) IS NOT '2026-02-30'"));
+    assert!(ok(
+        "SELECT date(julianday('2026-02-30')) IS NOT '2026-02-30'"
+    ));
 }

@@ -8,34 +8,151 @@ use std::sync::{Arc, Mutex};
 /// Functions that user SQL can call (lowercase).
 const ALLOWED_FUNCTIONS: &[&str] = &[
     // Core scalar functions
-    "abs", "char", "coalesce", "concat", "concat_ws", "format", "glob", "hex", "if", "ifnull",
-    "iif", "instr", "length", "like", "likelihood", "likely", "lower", "ltrim", "max", "min",
-    "nullif", "octet_length", "printf", "quote", "random", "randomblob", "replace", "round",
-    "rtrim", "sign", "soundex", "substr", "substring", "trim", "typeof", "unhex", "unicode",
-    "unistr", "unistr_quote", "unlikely", "upper", "zeroblob", "changes", "total_changes",
-    "last_insert_rowid", "sqlite_version",
+    "abs",
+    "char",
+    "coalesce",
+    "concat",
+    "concat_ws",
+    "format",
+    "glob",
+    "hex",
+    "if",
+    "ifnull",
+    "iif",
+    "instr",
+    "length",
+    "like",
+    "likelihood",
+    "likely",
+    "lower",
+    "ltrim",
+    "max",
+    "min",
+    "nullif",
+    "octet_length",
+    "printf",
+    "quote",
+    "random",
+    "randomblob",
+    "replace",
+    "round",
+    "rtrim",
+    "sign",
+    "soundex",
+    "substr",
+    "substring",
+    "trim",
+    "typeof",
+    "unhex",
+    "unicode",
+    "unistr",
+    "unistr_quote",
+    "unlikely",
+    "upper",
+    "zeroblob",
+    "changes",
+    "total_changes",
+    "last_insert_rowid",
+    "sqlite_version",
     // Aggregate functions
-    "avg", "count", "group_concat", "string_agg", "sum", "total", "median", "percentile",
-    "percentile_cont", "percentile_disc",
+    "avg",
+    "count",
+    "group_concat",
+    "string_agg",
+    "sum",
+    "total",
+    "median",
+    "percentile",
+    "percentile_cont",
+    "percentile_disc",
     // Window functions
-    "row_number", "rank", "dense_rank", "percent_rank", "cume_dist", "ntile", "lag", "lead",
-    "first_value", "last_value", "nth_value",
+    "row_number",
+    "rank",
+    "dense_rank",
+    "percent_rank",
+    "cume_dist",
+    "ntile",
+    "lag",
+    "lead",
+    "first_value",
+    "last_value",
+    "nth_value",
     // Date and time functions
-    "date", "time", "datetime", "julianday", "unixepoch", "strftime", "timediff",
-    "current_date", "current_time", "current_timestamp",
+    "date",
+    "time",
+    "datetime",
+    "julianday",
+    "unixepoch",
+    "strftime",
+    "timediff",
+    "current_date",
+    "current_time",
+    "current_timestamp",
     // Math functions
-    "acos", "acosh", "asin", "asinh", "atan", "atan2", "atanh", "ceil", "ceiling", "cos", "cosh",
-    "degrees", "exp", "floor", "ln", "log", "log10", "log2", "mod", "pi", "pow", "power",
-    "radians", "sin", "sinh", "sqrt", "tan", "tanh", "trunc",
+    "acos",
+    "acosh",
+    "asin",
+    "asinh",
+    "atan",
+    "atan2",
+    "atanh",
+    "ceil",
+    "ceiling",
+    "cos",
+    "cosh",
+    "degrees",
+    "exp",
+    "floor",
+    "ln",
+    "log",
+    "log10",
+    "log2",
+    "mod",
+    "pi",
+    "pow",
+    "power",
+    "radians",
+    "sin",
+    "sinh",
+    "sqrt",
+    "tan",
+    "tanh",
+    "trunc",
     // JSON functions
-    "json", "jsonb", "json_array", "jsonb_array", "json_array_length", "json_error_position",
-    "json_extract", "jsonb_extract", "json_insert", "jsonb_insert", "json_object", "jsonb_object",
-    "json_patch", "jsonb_patch", "json_pretty", "json_remove", "jsonb_remove", "json_replace",
-    "jsonb_replace", "json_set", "jsonb_set", "json_type", "json_valid", "json_quote",
-    "json_group_array", "jsonb_group_array", "json_group_object", "jsonb_group_object", "->",
+    "json",
+    "jsonb",
+    "json_array",
+    "jsonb_array",
+    "json_array_length",
+    "json_error_position",
+    "json_extract",
+    "jsonb_extract",
+    "json_insert",
+    "jsonb_insert",
+    "json_object",
+    "jsonb_object",
+    "json_patch",
+    "jsonb_patch",
+    "json_pretty",
+    "json_remove",
+    "jsonb_remove",
+    "json_replace",
+    "jsonb_replace",
+    "json_set",
+    "jsonb_set",
+    "json_type",
+    "json_valid",
+    "json_quote",
+    "json_group_array",
+    "jsonb_group_array",
+    "json_group_object",
+    "jsonb_group_object",
+    "->",
     "->>",
     // Armarium functions
-    "regexp", "regexp_replace", "normalize_nfkc",
+    "regexp",
+    "regexp_replace",
+    "normalize_nfkc",
 ];
 
 /// Table-valued functions that user SQL can read.
@@ -54,6 +171,8 @@ struct State {
     writes: Vec<String>,
     /// The first operation that the authorizer refused.
     denied: Option<String>,
+    /// A result table that the statement can fill (not counted as a write).
+    result_target: Option<String>,
 }
 
 /// The result of one checked statement.
@@ -107,10 +226,20 @@ impl Sandbox {
     pub fn begin(&self, working: impl IntoIterator<Item = String>, read_only: bool) {
         let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
         st.enabled = true;
-        st.working = working.into_iter().map(|n| n.to_ascii_lowercase()).collect();
+        st.working = working
+            .into_iter()
+            .map(|n| n.to_ascii_lowercase())
+            .collect();
         st.read_only = read_only;
         st.writes.clear();
         st.denied = None;
+        st.result_target = None;
+    }
+
+    /// Allows inserts into one result table (for `INSERT INTO result SELECT ...`).
+    pub fn allow_result_target(&self, table: Option<String>) {
+        let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        st.result_target = table.map(|t| t.to_ascii_lowercase());
     }
 
     /// Clears the report of the last statement. The checks stay enabled.
@@ -153,11 +282,20 @@ fn decide(st: &State, ctx: &AuthContext<'_>) -> Result<Option<String>, String> {
                 Err(format!("reading table {table_name}"))
             }
         }
+        AuthAction::Insert { table_name }
+            if st.result_target.as_deref() == Some(table_name.to_ascii_lowercase().as_str()) =>
+        {
+            Ok(None)
+        }
         AuthAction::Insert { table_name } | AuthAction::Delete { table_name } => {
             write_target(st, table_name, internal_trigger, working(table_name))
         }
-        AuthAction::Update { table_name, column_name } => {
-            if ROWID_NAMES.contains(&column_name.to_ascii_lowercase().as_str()) && !internal_trigger {
+        AuthAction::Update {
+            table_name,
+            column_name,
+        } => {
+            if ROWID_NAMES.contains(&column_name.to_ascii_lowercase().as_str()) && !internal_trigger
+            {
                 return Err(format!("updating the {column_name} of {table_name}"));
             }
             write_target(st, table_name, internal_trigger, working(table_name))

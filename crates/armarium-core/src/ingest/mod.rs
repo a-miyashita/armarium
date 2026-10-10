@@ -6,7 +6,9 @@ pub mod excel;
 
 use crate::error::{CoreError, Result};
 use crate::fsutil::Fingerprint;
-use crate::model::{CellNoteKind, ColumnSchema, Dialect, LogicalType, ReadOptions, TableId, TypeSource};
+use crate::model::{
+    CellNoteKind, ColumnSchema, Dialect, LogicalType, ReadOptions, TableId, TypeSource,
+};
 use crate::naming::{self, quote_ident};
 use rusqlite::Connection;
 use std::collections::HashMap;
@@ -54,14 +56,26 @@ const STAGE: &str = "__arm_stage";
 /// Reads a delimited text file and detects its dialect.
 pub fn read_text(path: &Path, opts: &ReadOptions) -> Result<(String, Dialect, bool)> {
     let bytes = std::fs::read(path).map_err(|e| CoreError::from_io(e, path))?;
-    let decoded = encoding::decode(&bytes, opts.encoding.as_deref(), &path.display().to_string())?;
+    let decoded = encoding::decode(
+        &bytes,
+        opts.encoding.as_deref(),
+        &path.display().to_string(),
+    )?;
     drop(bytes);
     let ext = crate::workspace::extension(path);
-    let fixed_delim = opts
-        .delimiter
-        .or(if matches!(ext.as_str(), "tsv" | "tab") { Some('\t') } else { None });
+    let fixed_delim = opts.delimiter.or(if matches!(ext.as_str(), "tsv" | "tab") {
+        Some('\t')
+    } else {
+        None
+    });
     let fixed_quote = opts.quote.map(|q| if q == '\0' { None } else { Some(q) });
-    let det = csv::detect(&decoded.text, fixed_delim, fixed_quote, opts.has_header, opts.skip_rows);
+    let det = csv::detect(
+        &decoded.text,
+        fixed_delim,
+        fixed_quote,
+        opts.has_header,
+        opts.skip_rows,
+    );
     let text = decoded.text;
     let final_line_ending = text.ends_with(['\n', '\r']);
     let dialect = Dialect {
@@ -92,7 +106,8 @@ pub fn load_csv(
     let (text, mut dialect, uncertain) = read_text(path, opts)?;
     let mut warnings = Vec::new();
     if uncertain && crate::workspace::extension(path) == "txt" {
-        warnings.push("Armarium could not detect the delimiter. Check the read settings.".to_string());
+        warnings
+            .push("Armarium could not detect the delimiter. Check the read settings.".to_string());
     }
     let total = text.len() as u64;
 
@@ -115,7 +130,10 @@ pub fn load_csv(
                 first = Some(record_values(&rec));
             }
         }
-        let mut ncols = headers.len().max(first.as_ref().map(|f| f.0.len()).unwrap_or(0)).max(1);
+        let mut ncols = headers
+            .len()
+            .max(first.as_ref().map(|f| f.0.len()).unwrap_or(0))
+            .max(1);
         create_stage(conn, ncols)?;
         let mut all_quoted = vec![true; ncols];
         let mut seen_value = vec![false; ncols];
@@ -170,12 +188,11 @@ pub fn load_csv(
             }
             insert(&vals, &q, &mut ncols, &mut all_quoted, &mut seen_value)?;
             rows += 1;
-            if rows % 16384 == 0 {
+            if rows.is_multiple_of(16384) {
                 ctl.check()?;
                 (ctl.progress)(parser.position() as u64, Some(total));
             }
         }
-        drop(insert);
         if ragged > 0 {
             warnings.push(format!("{ragged} row(s) had a different number of fields."));
         }
@@ -190,8 +207,11 @@ pub fn load_csv(
             });
         }
         let sql_names = naming::column_names(&display);
-        let quoted: Vec<bool> = (0..ncols).map(|i| all_quoted[i] && seen_value[i] && rows > 0).collect();
-        let (columns, mut w) = infer_and_create(conn, id, sql_name, &display, &sql_names, &quoted, opts)?;
+        let quoted: Vec<bool> = (0..ncols)
+            .map(|i| all_quoted[i] && seen_value[i] && rows > 0)
+            .collect();
+        let (columns, mut w) =
+            infer_and_create(conn, id, sql_name, &display, &sql_names, &quoted, opts)?;
         warnings.append(&mut w);
         conn.execute_batch(&format!("DROP TABLE {STAGE}"))?;
         create_internal(conn, id, sql_name)?;
@@ -212,7 +232,11 @@ fn record_values(rec: &csv::Record) -> (Vec<Option<String>>, Vec<bool>) {
     let mut q = Vec::with_capacity(rec.len());
     for i in 0..rec.len() {
         let f = rec.field(i);
-        v.push(if f.is_empty() { None } else { Some(f.to_string()) });
+        v.push(if f.is_empty() {
+            None
+        } else {
+            Some(f.to_string())
+        });
         q.push(rec.quoted(i));
     }
     (v, q)
@@ -242,9 +266,15 @@ fn infer_and_create(
         for i in 1..=n {
             let c = format!("c{i}");
             parts.push(format!("count({c})"));
-            parts.push(format!("sum({c} IS NOT NULL AND CAST(CAST({c} AS INTEGER) AS TEXT) IS NOT {c})"));
-            parts.push(format!("sum({c} IS NOT NULL AND CAST(CAST({c} AS REAL) AS TEXT) IS NOT {c})"));
-            parts.push(format!("sum({c} IS NOT NULL AND date(julianday({c})) IS NOT {c})"));
+            parts.push(format!(
+                "sum({c} IS NOT NULL AND CAST(CAST({c} AS INTEGER) AS TEXT) IS NOT {c})"
+            ));
+            parts.push(format!(
+                "sum({c} IS NOT NULL AND CAST(CAST({c} AS REAL) AS TEXT) IS NOT {c})"
+            ));
+            parts.push(format!(
+                "sum({c} IS NOT NULL AND date(julianday({c})) IS NOT {c})"
+            ));
             parts.push(format!(
                 "sum({c} IS NOT NULL AND {c} IS NOT datetime(julianday({c})) \
                  AND {c} IS NOT strftime('%Y-%m-%d %H:%M:%f', julianday({c})) \
@@ -259,7 +289,9 @@ fn infer_and_create(
                 if count == 0 {
                     continue;
                 }
-                let bad = |k: usize| -> rusqlite::Result<i64> { Ok(r.get::<_, Option<i64>>(i * 5 + k)?.unwrap_or(0)) };
+                let bad = |k: usize| -> rusqlite::Result<i64> {
+                    Ok(r.get::<_, Option<i64>>(i * 5 + k)?.unwrap_or(0))
+                };
                 *ty = if bad(1)? == 0 {
                     LogicalType::Integer
                 } else if bad(2)? == 0 {
@@ -279,7 +311,11 @@ fn infer_and_create(
     // User overrides (by display name).
     let mut sources = vec![TypeSource::Inferred; n];
     for (i, name) in display.iter().enumerate() {
-        let Some(&want) = opts.column_types.get(name).or_else(|| opts.column_types.get(&sql_names[i])) else {
+        let Some(&want) = opts
+            .column_types
+            .get(name)
+            .or_else(|| opts.column_types.get(&sql_names[i]))
+        else {
             continue;
         };
         if want == types[i] {
@@ -301,8 +337,16 @@ fn infer_and_create(
     let defs: Vec<String> = (0..n)
         .map(|i| format!("{} {}", quote_ident(&sql_names[i]), types[i].sqlite_type()))
         .collect();
-    let defs = if defs.is_empty() { vec![format!("{} TEXT", quote_ident("column1"))] } else { defs };
-    conn.execute_batch(&format!("CREATE TABLE {} ({}) STRICT", quote_ident(sql_name), defs.join(", ")))?;
+    let defs = if defs.is_empty() {
+        vec![format!("{} TEXT", quote_ident("column1"))]
+    } else {
+        defs
+    };
+    conn.execute_batch(&format!(
+        "CREATE TABLE {} ({}) STRICT",
+        quote_ident(sql_name),
+        defs.join(", ")
+    ))?;
     let targets: Vec<String> = sql_names.iter().map(|s| quote_ident(s)).collect();
     let exprs: Vec<String> = (0..n)
         .map(|i| {
@@ -326,7 +370,10 @@ fn infer_and_create(
     let columns = (0..n.max(1))
         .map(|i| ColumnSchema {
             display_name: display.get(i).cloned().unwrap_or_else(|| "column1".into()),
-            sql_name: sql_names.get(i).cloned().unwrap_or_else(|| "column1".into()),
+            sql_name: sql_names
+                .get(i)
+                .cloned()
+                .unwrap_or_else(|| "column1".into()),
             logical_type: types.get(i).copied().unwrap_or(LogicalType::Text),
             type_source: sources.get(i).copied().unwrap_or(TypeSource::Inferred),
             always_quoted: quoted.get(i).copied().unwrap_or(false),
@@ -340,7 +387,9 @@ fn convert_stage_column(conn: &Connection, col: usize, ty: LogicalType) -> Resul
     let c = format!("c{col}");
     let mut updates: Vec<(i64, String)> = Vec::new();
     {
-        let mut st = conn.prepare(&format!("SELECT rowid, {c} FROM {STAGE} WHERE {c} IS NOT NULL"))?;
+        let mut st = conn.prepare(&format!(
+            "SELECT rowid, {c} FROM {STAGE} WHERE {c} IS NOT NULL"
+        ))?;
         let mut rows = st.query([])?;
         while let Some(r) = rows.next()? {
             let rid: i64 = r.get(0)?;

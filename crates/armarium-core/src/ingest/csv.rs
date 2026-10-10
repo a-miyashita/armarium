@@ -96,7 +96,11 @@ impl<'a> Parser<'a> {
                 match self.s[i] {
                     b'\r' => {
                         end = i;
-                        next = if self.s.get(i + 1) == Some(&b'\n') { i + 2 } else { i + 1 };
+                        next = if self.s.get(i + 1) == Some(&b'\n') {
+                            i + 2
+                        } else {
+                            i + 1
+                        };
                         break;
                     }
                     b'\n' => {
@@ -289,7 +293,9 @@ pub fn detect(
                     let valid = mode > 1;
                     let bvalid = bm > 1;
                     (valid && !bvalid)
-                        || (valid == bvalid && (consistency > bc + 1e-9 || ((consistency - bc).abs() < 1e-9 && mode > bm)))
+                        || (valid == bvalid
+                            && (consistency > bc + 1e-9
+                                || ((consistency - bc).abs() < 1e-9 && mode > bm)))
                 }
             };
             if better {
@@ -314,7 +320,8 @@ pub fn detect(
         None => EscapeStyle::Doubled,
     };
 
-    let has_header = fixed_header.unwrap_or_else(|| detect_header(sample, delimiter, quote, escape, skip_rows, partial));
+    let has_header = fixed_header
+        .unwrap_or_else(|| detect_header(sample, delimiter, quote, escape, skip_rows, partial));
     Detected {
         delimiter,
         quote,
@@ -405,9 +412,18 @@ fn kind_of(v: &str) -> Kind {
 
 /// Row 1 is a header if it has no empty or duplicate values, and its types are
 /// different from the types in the other rows.
-fn detect_header(sample: &str, d: char, q: Option<char>, esc: EscapeStyle, skip_rows: u32, partial: bool) -> bool {
+fn detect_header(
+    sample: &str,
+    d: char,
+    q: Option<char>,
+    esc: EscapeStyle,
+    skip_rows: u32,
+    partial: bool,
+) -> bool {
     let recs = sample_records(sample, d, q, esc, skip_rows, partial);
-    let Some(first) = recs.first() else { return true };
+    let Some(first) = recs.first() else {
+        return true;
+    };
     let mut seen = std::collections::HashSet::new();
     for v in first {
         if v.trim().is_empty() || !seen.insert(v.to_lowercase()) {
@@ -451,25 +467,44 @@ fn detect_header(sample: &str, d: char, q: Option<char>, esc: EscapeStyle, skip_
 mod tests {
     use super::*;
 
-    fn parse_all(text: &str, d: char, q: Option<char>, esc: EscapeStyle) -> Vec<(Vec<String>, Vec<bool>)> {
+    fn parse_all(
+        text: &str,
+        d: char,
+        q: Option<char>,
+        esc: EscapeStyle,
+    ) -> Vec<(Vec<String>, Vec<bool>)> {
         let mut p = Parser::new(text, d, q, esc);
         let mut rec = Record::default();
         let mut out = Vec::new();
         while p.next_record(&mut rec).is_some() {
-            out.push((rec.fields().map(str::to_string).collect(), (0..rec.len()).map(|i| rec.quoted(i)).collect()));
+            out.push((
+                rec.fields().map(str::to_string).collect(),
+                (0..rec.len()).map(|i| rec.quoted(i)).collect(),
+            ));
         }
         out
     }
 
     #[test]
     fn parses_quotes_and_line_endings() {
-        let r = parse_all("a,\"b,\"\"c\"\"\"\r\n\"x\ny\",\r\n", ',', Some('"'), EscapeStyle::Doubled);
+        let r = parse_all(
+            "a,\"b,\"\"c\"\"\"\r\n\"x\ny\",\r\n",
+            ',',
+            Some('"'),
+            EscapeStyle::Doubled,
+        );
         assert_eq!(r.len(), 2);
         assert_eq!(r[0].0, vec!["a", "b,\"c\""]);
         assert_eq!(r[0].1, vec![false, true]);
         assert_eq!(r[1].0, vec!["x\ny", ""]);
         let r = parse_all("a\tb\nc", '\t', None, EscapeStyle::Doubled);
-        assert_eq!(r, vec![(vec!["a".into(), "b".into()], vec![false, false]), (vec!["c".into()], vec![false])]);
+        assert_eq!(
+            r,
+            vec![
+                (vec!["a".into(), "b".into()], vec![false, false]),
+                (vec!["c".into()], vec![false])
+            ]
+        );
         let r = parse_all("\"a\\\"b\",c\n", ',', Some('"'), EscapeStyle::Backslash);
         assert_eq!(r[0].0, vec!["a\"b", "c"]);
         let r = parse_all("a,b,\n", ',', Some('"'), EscapeStyle::Doubled);
@@ -478,7 +513,13 @@ mod tests {
 
     #[test]
     fn detects_dialects() {
-        let d = detect("id;name;amount\r\n1;a;10\r\n2;b;20\r\n", None, None, None, 0);
+        let d = detect(
+            "id;name;amount\r\n1;a;10\r\n2;b;20\r\n",
+            None,
+            None,
+            None,
+            0,
+        );
         assert_eq!(d.delimiter, ';');
         assert_eq!(d.line_ending, LineEnding::Crlf);
         assert!(d.has_header);
@@ -488,7 +529,13 @@ mod tests {
         assert!(!d.has_header);
         assert_eq!(d.line_ending, LineEnding::Lf);
 
-        let d = detect("name,city\nTaro,\"Tokyo, Japan\"\nHanako,Osaka\n", None, None, None, 0);
+        let d = detect(
+            "name,city\nTaro,\"Tokyo, Japan\"\nHanako,Osaka\n",
+            None,
+            None,
+            None,
+            0,
+        );
         assert_eq!(d.delimiter, ',');
         assert!(d.has_header);
 

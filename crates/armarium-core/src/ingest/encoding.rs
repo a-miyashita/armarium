@@ -92,9 +92,13 @@ impl TextEncoder {
         let kind = if encoding == UTF_8 {
             Kind::Utf8
         } else if encoding == UTF_16LE {
-            Kind::Utf16 { little_endian: true }
+            Kind::Utf16 {
+                little_endian: true,
+            }
         } else if encoding == UTF_16BE {
-            Kind::Utf16 { little_endian: false }
+            Kind::Utf16 {
+                little_endian: false,
+            }
         } else {
             Kind::Legacy(encoding.new_encoder())
         };
@@ -105,8 +109,12 @@ impl TextEncoder {
     pub fn bom(&self) -> &'static [u8] {
         match self.kind {
             Kind::Utf8 => b"\xEF\xBB\xBF",
-            Kind::Utf16 { little_endian: true } => b"\xFF\xFE",
-            Kind::Utf16 { little_endian: false } => b"\xFE\xFF",
+            Kind::Utf16 {
+                little_endian: true,
+            } => b"\xFF\xFE",
+            Kind::Utf16 {
+                little_endian: false,
+            } => b"\xFE\xFF",
             Kind::Legacy(_) => b"",
         }
     }
@@ -121,7 +129,11 @@ impl TextEncoder {
             }
             Kind::Utf16 { little_endian } => {
                 for u in text.encode_utf16() {
-                    let b = if *little_endian { u.to_le_bytes() } else { u.to_be_bytes() };
+                    let b = if *little_endian {
+                        u.to_le_bytes()
+                    } else {
+                        u.to_be_bytes()
+                    };
                     out.extend_from_slice(&b);
                 }
                 Ok(())
@@ -133,7 +145,8 @@ impl TextEncoder {
                         .max_buffer_length_from_utf8_without_replacement(src.len())
                         .unwrap_or(src.len() * 4 + 16);
                     out.reserve(need);
-                    let (res, read) = enc.encode_from_utf8_to_vec_without_replacement(src, out, false);
+                    let (res, read) =
+                        enc.encode_from_utf8_to_vec_without_replacement(src, out, false);
                     src = &src[read..];
                     match res {
                         encoding_rs::EncoderResult::InputEmpty => return Ok(()),

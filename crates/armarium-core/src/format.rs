@@ -83,7 +83,9 @@ pub fn convert_value(v: &Value, ty: LogicalType) -> Result<Value> {
             _ => parse_input(Some(&real_to_text(*f)), ty),
         },
         Value::Text(s) => parse_input(Some(s), ty),
-        Value::Blob(_) => Err(CoreError::TypeMismatch("a BLOB value cannot be converted".into())),
+        Value::Blob(_) => Err(CoreError::TypeMismatch(
+            "a BLOB value cannot be converted".into(),
+        )),
     }
 }
 
@@ -132,10 +134,21 @@ pub fn parse_date(s: &str) -> Option<(i32, u32, u32)> {
     let y = it.next()?;
     let m = it.next()?;
     let d = it.next()?;
-    if it.next().is_some() || y.len() != 4 || m.is_empty() || m.len() > 2 || d.is_empty() || d.len() > 2 {
+    if it.next().is_some()
+        || y.len() != 4
+        || m.is_empty()
+        || m.len() > 2
+        || d.is_empty()
+        || d.len() > 2
+    {
         return None;
     }
-    if !(y.bytes().chain(m.bytes()).chain(d.bytes()).all(|b| b.is_ascii_digit())) {
+    if !(y
+        .bytes()
+        .chain(m.bytes())
+        .chain(d.bytes())
+        .all(|b| b.is_ascii_digit()))
+    {
         return None;
     }
     let (y, m, d): (i32, u32, u32) = (y.parse().ok()?, m.parse().ok()?, d.parse().ok()?);
@@ -160,7 +173,11 @@ pub fn parse_datetime(s: &str) -> Option<String> {
     }
     let h: u32 = parts[0].parse().ok()?;
     let mi: u32 = parts[1].parse().ok()?;
-    let se: u32 = if parts.len() == 3 { parts[2].parse().ok()? } else { 0 };
+    let se: u32 = if parts.len() == 3 {
+        parts[2].parse().ok()?
+    } else {
+        0
+    };
     if h > 23 || mi > 59 || se > 59 || parts.iter().any(|p| p.is_empty() || p.len() > 2) {
         return None;
     }
@@ -181,13 +198,28 @@ mod tests {
 
     #[test]
     fn parses_inputs() {
-        assert_eq!(parse_input(Some(""), LogicalType::Integer).unwrap(), Value::Null);
-        assert_eq!(parse_input(Some("1,234"), LogicalType::Integer).unwrap(), Value::Integer(1234));
-        assert_eq!(parse_input(Some(" 12 "), LogicalType::Integer).unwrap(), Value::Integer(12));
+        assert_eq!(
+            parse_input(Some(""), LogicalType::Integer).unwrap(),
+            Value::Null
+        );
+        assert_eq!(
+            parse_input(Some("1,234"), LogicalType::Integer).unwrap(),
+            Value::Integer(1234)
+        );
+        assert_eq!(
+            parse_input(Some(" 12 "), LogicalType::Integer).unwrap(),
+            Value::Integer(12)
+        );
         assert!(parse_input(Some("12,34"), LogicalType::Integer).is_err());
         assert!(parse_input(Some("abc"), LogicalType::Integer).is_err());
-        assert_eq!(parse_input(Some("1.5"), LogicalType::Real).unwrap(), Value::Real(1.5));
-        assert_eq!(parse_input(Some("1e3"), LogicalType::Real).unwrap(), Value::Real(1000.0));
+        assert_eq!(
+            parse_input(Some("1.5"), LogicalType::Real).unwrap(),
+            Value::Real(1.5)
+        );
+        assert_eq!(
+            parse_input(Some("1e3"), LogicalType::Real).unwrap(),
+            Value::Real(1000.0)
+        );
         assert!(parse_input(Some("inf"), LogicalType::Real).is_err());
         assert!(parse_input(Some("NaN"), LogicalType::Real).is_err());
         assert_eq!(
@@ -199,6 +231,9 @@ mod tests {
             parse_input(Some("2026-01-02T03:04"), LogicalType::DateTime).unwrap(),
             Value::Text("2026-01-02 03:04:00".into())
         );
-        assert_eq!(parse_input(Some("TRUE"), LogicalType::Boolean).unwrap(), Value::Integer(1));
+        assert_eq!(
+            parse_input(Some("TRUE"), LogicalType::Boolean).unwrap(),
+            Value::Integer(1)
+        );
     }
 }

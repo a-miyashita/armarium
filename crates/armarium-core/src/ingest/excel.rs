@@ -167,8 +167,12 @@ pub fn load_sheet(
                 k = match (k, kc) {
                     (None, x) => Some(x),
                     (Some(a), b) if a == b => Some(a),
-                    (Some(Kind::Int), Kind::Float) | (Some(Kind::Float), Kind::Int) => Some(Kind::Float),
-                    (Some(Kind::Date), Kind::DateTime) | (Some(Kind::DateTime), Kind::Date) => Some(Kind::DateTime),
+                    (Some(Kind::Int), Kind::Float) | (Some(Kind::Float), Kind::Int) => {
+                        Some(Kind::Float)
+                    }
+                    (Some(Kind::Date), Kind::DateTime) | (Some(Kind::DateTime), Kind::Date) => {
+                        Some(Kind::DateTime)
+                    }
                     _ => {
                         mixed = true;
                         break;
@@ -192,16 +196,27 @@ pub fn load_sheet(
     let mut sources = vec![TypeSource::Inferred; width];
     let mut warnings = Vec::new();
     for j in 0..width {
-        if let Some(&want) = opts.column_types.get(&display[j]).or_else(|| opts.column_types.get(&sql_names[j])) {
+        if let Some(&want) = opts
+            .column_types
+            .get(&display[j])
+            .or_else(|| opts.column_types.get(&sql_names[j]))
+        {
             let ok = data.iter().all(|r| {
-                let v = r.get(j).map(|d| typed_value(d, types[j])).unwrap_or(Value::Null);
+                let v = r
+                    .get(j)
+                    .map(|d| typed_value(d, types[j]))
+                    .unwrap_or(Value::Null);
                 crate::format::convert_value(&v, want).is_ok()
             });
             if ok {
                 types[j] = want;
                 sources[j] = TypeSource::UserOverride;
             } else {
-                warnings.push(format!("The type of column '{}' cannot be changed to {}.", display[j], want.as_str()));
+                warnings.push(format!(
+                    "The type of column '{}' cannot be changed to {}.",
+                    display[j],
+                    want.as_str()
+                ));
             }
         }
     }
@@ -211,7 +226,11 @@ pub fn load_sheet(
         let defs: Vec<String> = (0..width)
             .map(|j| format!("{} {}", quote_ident(&sql_names[j]), types[j].sqlite_type()))
             .collect();
-        conn.execute_batch(&format!("CREATE TABLE {} ({}) STRICT", quote_ident(sql_name), defs.join(", ")))?;
+        conn.execute_batch(&format!(
+            "CREATE TABLE {} ({}) STRICT",
+            quote_ident(sql_name),
+            defs.join(", ")
+        ))?;
         let cols: Vec<String> = sql_names.iter().map(|s| quote_ident(s)).collect();
         let params: Vec<String> = (0..=width).map(|i| format!("?{}", i + 1)).collect();
         let mut st = conn.prepare(&format!(
@@ -234,13 +253,19 @@ pub fn load_sheet(
                 };
                 st.raw_bind_parameter(j + 2, v)?;
                 if let Data::Error(e) = d {
-                    notes.insert((rid, sql_names[j].clone()), (CellNoteKind::Error, e.to_string()));
+                    notes.insert(
+                        (rid, sql_names[j].clone()),
+                        (CellNoteKind::Error, e.to_string()),
+                    );
                 }
                 if let Some(f) = &formulas {
                     let abs = (start.0 + (header_offset + i) as u32, start.1 + j as u32);
                     if let Some(text) = f.get_value(abs) {
                         if !text.is_empty() {
-                            notes.insert((rid, sql_names[j].clone()), (CellNoteKind::Formula, format!("={text}")));
+                            notes.insert(
+                                (rid, sql_names[j].clone()),
+                                (CellNoteKind::Formula, format!("={text}")),
+                            );
                         }
                     }
                 }

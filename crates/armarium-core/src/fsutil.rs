@@ -15,9 +15,9 @@ pub fn atomic_write(
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
-    let name = path
-        .file_name()
-        .ok_or_else(|| CoreError::InvalidArgument(format!("not a file path: {}", path.display())))?;
+    let name = path.file_name().ok_or_else(|| {
+        CoreError::InvalidArgument(format!("not a file path: {}", path.display()))
+    })?;
     let tmp = dir.join(format!(
         ".{}.armarium-{}-{}.tmp",
         name.to_string_lossy(),
@@ -201,7 +201,10 @@ pub fn local_data_dir() -> PathBuf {
         return PathBuf::from(d).join("armarium");
     }
     if let Some(h) = std::env::var_os("HOME") {
-        return PathBuf::from(h).join(".local").join("share").join("armarium");
+        return PathBuf::from(h)
+            .join(".local")
+            .join("share")
+            .join("armarium");
     }
     std::env::temp_dir().join("armarium")
 }
