@@ -4,6 +4,7 @@ pub mod db;
 pub mod error;
 pub mod format;
 pub mod fsutil;
+pub mod ingest;
 pub mod model;
 pub mod naming;
 pub mod sql;
