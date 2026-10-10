@@ -51,7 +51,7 @@ fn main() {
         ..EngineConfig::default()
     };
     let engine = Engine::new(cfg, Arc::new(NoEvents)).unwrap();
-    let r = engine.add_sources(&[path.clone()]).unwrap();
+    let r = engine.add_sources(std::slice::from_ref(&path)).unwrap();
     let sid = r[0].source_id.clone().unwrap();
     let table = engine
         .list_sources()

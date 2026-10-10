@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Test and build (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix ui
+
+      - name: Rust format
+        run: cargo fmt --all -- --check
+
+      - name: Rust tests (also writes the TypeScript bindings)
+        run: cargo test --workspace
+
+      - name: TypeScript bindings are up to date
+        shell: bash
+        run: git diff --exit-code -- ui/src/bindings
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Frontend lint
+        run: npm --prefix ui run lint
+
+      - name: Frontend tests
+        run: npm --prefix ui test
+
+      - name: Build armarium-mcp
+        run: cargo build --release -p armarium-mcp
+
+      - name: Copy armarium-mcp as a sidecar
+        shell: bash
+        run: |
+          mkdir -p src-tauri/binaries
+          cp target/release/armarium-mcp.exe src-tauri/binaries/armarium-mcp-x86_64-pc-windows-msvc.exe
+
+      - name: Tauri build (installer)
+        run: ui/node_modules/.bin/tauri build --config src-tauri/tauri.bundle.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: armarium-windows
+          path: |
+            target/release/bundle/nsis/*.exe
+            target/release/bundle/msi/*.msi
+          if-no-files-found: warn
