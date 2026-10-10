@@ -15,7 +15,7 @@
 |---|---|---|
 | Query | `SELECT`, `WITH ... SELECT`, `VALUES` | CTEs (also recursive), window functions, and `FULL OUTER JOIN` are available. |
 | DML | `INSERT`, `UPDATE`, `DELETE` | Each statement changes one registered table. `RETURNING` and `UPDATE ... FROM` are available. |
-| Query plan | `EXPLAIN QUERY PLAN` | Shows the plan. Does not run the query. |
+| Query plan | `EXPLAIN QUERY PLAN`, `EXPLAIN` | Shows the plan or the bytecode. Does not run the query. |
 
 ### 2.1 Refused operations
 
@@ -24,7 +24,8 @@
 - Transaction control (`BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`). Armarium controls the transactions.
 - References to internal tables (`__arm_*`, `sqlite_*`)
 - Updates of `rowid`
-- Calls to functions that are not on the allow list
+- Calls to functions that are not on the allow list, and table-valued functions other than `json_each` and `json_tree`
+- `VACUUM` (a statement that is not read-only must change exactly one working table)
 
 ### 2.2 How Armarium checks statements
 
@@ -55,7 +56,7 @@ For details, see [ADR-0010](../adrs/0010-sql-naming.md).
 
 ### 4.1 SELECT
 
-- Armarium keeps the result in an internal table, `__arm_res_{n}`. First, Armarium prepares the SELECT statement alone with the authorizer enabled, to check it. Then Armarium puts it in a `CREATE TABLE ... AS` statement and runs it. The grid fetches the result in pages.
+- Armarium keeps the result in an internal table, `__arm_res_{n}`. First, Armarium prepares the SELECT statement alone with the authorizer enabled, to check it. Then Armarium runs `INSERT INTO __arm_res_{n} SELECT * FROM (<statement>)`; the authorizer allows only this insert. The grid fetches the result in pages.
   - Armarium knows the total number of rows immediately, and does not run the query again when the user scrolls.
 - Armarium sets the logical type of each result column from the value types (`typeof`). If the result contains an original column as it is, the result column gets the logical type of the original column.
 - When the user closes the query tab, Armarium drops the result table.

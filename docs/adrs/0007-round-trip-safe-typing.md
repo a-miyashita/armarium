@@ -89,3 +89,16 @@ Each column has a SQLite storage type (the column type of the STRICT table) and 
 - SQLite has no DECIMAL type. Thus, the sum of a `Real` column can have floating-point errors.
 - The rule depends on the text format of `CAST(... AS TEXT)` in SQLite. When we update SQLite, the round-trip tests must check it.
 - Armarium writes edited values in the standard format of the type.
+
+## Amendments
+
+### 2026-10-11: Implementation notes
+
+- Armarium checks each column with `EXISTS` queries that stop at the first value that is not round-trip
+  safe, instead of one aggregate query over all rows. The result is the same. Spike M0-8: for 1 million
+  rows (69 MB), the load time decreased from 11.7 seconds to 2.7 seconds.
+- `DateTime` accepts four forms: `YYYY-MM-DD HH:MM:SS`, `YYYY-MM-DD HH:MM:SS.fff`, and the same two
+  forms with `T`. The values stay as they are in the file (the column type is `TEXT`).
+- A user override converts the values with the same rules as cell input (for example, `2026/1/2`
+  becomes `2026-01-02`, and `1,234` becomes `1234`). If a value cannot be converted, Armarium keeps the
+  inferred type and shows a warning.

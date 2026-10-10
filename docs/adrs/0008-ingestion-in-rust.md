@@ -39,3 +39,17 @@
 
 - We must make and test the read code (especially dialect detection).
 - Armarium inserts the data two times (temporary table, then working table). Spike M0-8 measures the time against the target (100 MB in 5 seconds).
+
+## Amendments
+
+### 2026-10-11: Own CSV parser, and decoding in memory
+
+- Armarium uses its own parser (`ingest/csv.rs`) instead of the `csv` crate. Reason: the `csv` crate
+  does not tell which fields were quoted. Armarium records, for each column, whether all fields were
+  quoted, and quotes them again on save. With this, files that quote some columns (for example, all
+  text columns) are byte-for-byte the same after "open → save".
+- Armarium reads and decodes the whole file in memory, and does not stream it. The peak memory is
+  approximately three times the file size. This is acceptable for the target (100 MB). We can change to
+  streaming later if necessary.
+- Spike M0-8 (release build, 1 million rows, 69 MB): read and decode 0.1 s, parse and insert 0.8 s,
+  type inference and working table 0.8 s, order table and triggers 0.6 s. Total 2.7 s.

@@ -108,9 +108,28 @@ M0 Foundation ──▶ M1 Viewer ──▶ M2 Edit and save ──▶ M3 SQL �
 
 | # | Question | When to decide |
 |---|---|---|
-| Q1 | Undo method (session extension or triggers) | After the result of M0-5 |
+| Q1 | Undo method (session extension or triggers) | **Decided**: session extension (ADR-0006, amendment 2026-10-11) |
 | Q2 | Is more than one workspace necessary? | At the end of M2 |
-| Q3 | Do we also give the difference between NULL and an empty string for CSV? | M2 |
-| Q4 | Do we allow temporary views (`CREATE TEMP VIEW`) for work in a query tab? | M3 |
+| Q3 | Do we also give the difference between NULL and an empty string for CSV? | **Decided for now**: no. An empty field is NULL. The display setting can show NULL. |
+| Q4 | Do we allow temporary views (`CREATE TEMP VIEW`) for work in a query tab? | **Decided for now**: no (ADR-0009). |
 | Q5 | Check the license notices (SQLite: public domain; calamine, umya-spreadsheet, ts-rs: MIT; license of the selected grid) and generate a NOTICE file. | M0 |
 | Q6 | Method of code signing | Before the first release |
+
+## 5. Implementation status (2026-10-11)
+
+| Milestone | Status | Notes |
+|---|---|---|
+| M0 | Done | Spikes M0-5, M0-7, and M0-8 are tests or examples. M0-6: Glide Data Grid (IME on Windows is not checked yet). CI runs on `windows-latest`. |
+| M1 | Done | `notify` monitors the parent directories. Test data is in the tests; `examples/load_bench.rs` makes large files. |
+| M2 | Done | The round-trip test (M2-7) covers 15 files (encodings, delimiters, quotes, line endings). |
+| M3 | Done | SELECT, DML, `RETURNING`, results, export, history, cancel. |
+| M4 | Done | Sheets in the tree, formula cells are read-only, "Save as" to XLSX or CSV. |
+| M5 | Done except M5-4 | All tools, resources, and the prompt. M5-4 (tests with MCP Inspector and Claude Desktop) is manual. The installer includes `armarium-mcp` as a sidecar (CI). |
+| M6 | Not started | |
+
+Known limits of the first implementation:
+
+- The core error messages are in English. The UI translates the titles of the dialogs.
+- Files are decoded in memory (approximately three times the file size).
+- Code signing (Q6) and the NOTICE file (Q5) are not done.
+

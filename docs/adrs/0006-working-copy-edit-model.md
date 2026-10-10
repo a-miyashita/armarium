@@ -68,3 +68,28 @@
 - The stability of `rowid` depends on the rule "never run `VACUUM`". The authorizer and tests protect this rule.
 - Each `INSERT` into the working table runs a trigger on the order table. (The index keeps the cost for each row small.)
 - If `rusqlite` cannot use the session extension with `rowid` tables, we change to the trigger method for undo (we check this in M0).
+
+## Amendments
+
+### 2026-10-11: Result of spike M0-5 and implementation notes
+
+- The session extension works with `rowid` tables. `rusqlite` does not expose
+  `SQLITE_SESSION_OBJCONFIG_ROWID`, so `armarium-core` calls the C API of the session extension
+  directly (`db/changeset.rs`). We do not need the trigger method.
+- The changeset of a grid operation and the triggers both write the order table. To apply a changeset
+  without errors:
+  - The insert trigger has `WHEN NOT EXISTS (SELECT 1 FROM __arm_ord_N WHERE rid = NEW.rowid)`.
+  - The conflict handler replaces a row on `DATA` and `CONFLICT`, and skips a row on `NOTFOUND`.
+- The session extension runs its own SQL while a statement runs. Thus, the authorizer checks user SQL
+  only while Armarium prepares it, and Armarium disables the authorizer before the statement runs
+  (see the amendment of ADR-0009).
+- A changeset keeps the table name. When the user changes the SQL name of a loaded table, Armarium
+  clears the undo history of that table.
+- Undo of a column deletion creates the table again with the original physical column order, because
+  older changesets use column positions.
+- SQLite can reuse the largest `rowid` after the row with that `rowid` is deleted. Undo stays correct
+  (the stack is last in, first out), but `diff_table` can show such a row as changed instead of deleted
+  and inserted.
+- Confirmation for large changes: Armarium cannot ask the user in the middle of a transaction from the
+  core. Instead, it rolls back and returns `UNDO_LIMIT_EXCEEDED`. If the user accepts, the UI runs the
+  statements again from the failed statement with `allowNoUndo`. Then the history of the table is cleared.

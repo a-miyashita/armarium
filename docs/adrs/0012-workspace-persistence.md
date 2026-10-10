@@ -30,3 +30,10 @@ Both the GUI and the MCP server (a different process) read and write this inform
 - People can read and edit the file. Backup and migration are easy.
 - The GUI and the MCP server can share the file.
 - We must handle concurrent writes ourselves (lock and merge).
+
+## Amendments
+
+### 2026-10-11: File lock
+
+- Armarium uses `std::fs::File::lock` (Rust 1.89 and later) for `workspace.json.lock` instead of the
+  `fs4` crate. The behavior is the same, and there is one dependency less.

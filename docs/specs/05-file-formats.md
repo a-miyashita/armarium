@@ -27,8 +27,8 @@ Armarium uses the start of the file (1 MB by default) to detect the items below.
 
 ### 1.2 Read
 
-1. Decode the file as a stream with `encoding_rs` and convert it to UTF-8.
-2. Parse the data with the `csv` crate (`csv-core`). If a row has the wrong number of fields, fill the missing fields with NULL, and add columns for the extra fields. (No data is lost.)
+1. Read the file and convert it to UTF-8 with `encoding_rs` (the whole file in memory; see the amendment of ADR-0008).
+2. Parse the data with the Armarium parser (`ingest/csv.rs`). The parser records which fields were quoted, so that a save can quote them again. If a row has the wrong number of fields, fill the missing fields with NULL, and add columns for the extra fields. (No data is lost.)
    - The status bar shows a warning with the number of rows that had the wrong number of fields.
 3. Decide the column names. If there is a header row, use row 1. If not, use `column1`, `column2`, and so on.
    - For an empty name, the SQL name is `column{n}`. For a duplicate name, the SQL name is, for example, `name_2`. The display name stays the same as the value in the file.
@@ -77,7 +77,7 @@ We add support in phases.
 
 | Phase | Behavior |
 |---|---|
-| M4 (first) | The user can edit the working copy of an Excel sheet. The user can save only with "Save as" (to a new `.xlsx` file or a CSV file). Armarium cannot overwrite the original file. |
+| M4 (first) | The user can edit the working copy of an Excel sheet. The user can save only with "Save as" (to a new `.xlsx` file or a CSV file). Armarium cannot overwrite the original file. "Save as" writes the new file and registers it as a new source. The sheet stays connected to the workbook (and stays dirty until the user discards the changes). |
 | M6 (later) | Armarium can overwrite `.xlsx` and `.xlsm` files. It updates only the cell values and keeps the formatting, the formulas, and the other sheets (`umya-spreadsheet`). |
 
 - `.xls`, `.ods`, and `.xlsb` files are always read-only. (The user can export them.)

@@ -37,7 +37,7 @@ For details, see [ADR-0013](../adrs/0013-mcp-server-mode.md).
 | Option | Meaning | Default |
 |---|---|---|
 | `--workspace <path>` | Path of `workspace.json` | `%APPDATA%\Armarium\workspace.json` |
-| `--read-only` | Disables the write tools (`execute`, `save_table`, `register_source`, `unregister_source`) | Off |
+| `--read-only` | Removes the write tools (`execute`, `save_table`, `discard_changes`, `register_source`, `unregister_source`, `export_result`) | Off |
 | `--allow-dir <path>` | A directory from which `register_source` can register files. You can give this option more than one time. | None. Without this option, registration is not possible. |
 | `--query-timeout <sec>` | Query timeout | 60 |
 | `--max-rows <n>` | Maximum number of rows in one response | 500 |
@@ -55,8 +55,8 @@ For details, see [ADR-0013](../adrs/0013-mcp-server-mode.md).
 | `save_table` | Save the working copy to the file | ✔ |
 | `discard_changes` | Discard the working copy and read the file again | ✔ |
 | `register_source` | Register a file (only in the `--allow-dir` directories) | ✔ |
-| `unregister_source` | Unregister a source (the file is not deleted) | ✔ |
-| `export_result` | Write a query result to CSV or XLSX (only in the `--allow-dir` directories) | ✔ |
+| `unregister_source` | Unregister a source (the file is not deleted). Input: `source` (the SQL name of a table of the source, or the source ID). | ✔ |
+| `export_result` | Run a SELECT statement and write all rows to CSV, TSV, or XLSX (only in the `--allow-dir` directories). Input: `sql`, `path`. | ✔ |
 
 ### 3.1 Example input and output
 

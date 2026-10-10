@@ -25,7 +25,7 @@ For details, see [ADR-0006](../adrs/0006-working-copy-edit-model.md).
 | Operation (`EditOp`) | Processing in SQLite | Undo method |
 |---|---|---|
 | `SetCells { cells: [(rid, col, value)] }` | `UPDATE ... WHERE rowid = ?` | Changeset |
-| `InsertRows { after_rid, count }` | `INSERT`, and update the order | Changeset |
+| `InsertRows { after_rid, count, above }` | `INSERT`, and update the order. With `above`, the rows go before `after_rid`. | Changeset |
 | `DeleteRows { rids }` | `DELETE WHERE rowid IN (...)` | Changeset |
 | `Paste { anchor, tsv }` | Split into `SetCells` (and `InsertRows` if necessary) | Changeset |
 | `Sql { statement }` | Run the user SQL | Changeset |
@@ -57,7 +57,7 @@ For details, see [ADR-0006](../adrs/0006-working-copy-edit-model.md).
 - Each table has its own undo stack and redo stack. (There is no global stack.)
   - A DML statement can read other tables, but it changes only one table.
 - Limits: 1,000 operations by default, or 256 MB of changesets in total. When a stack is full, Armarium discards the oldest entries.
-- If the changeset of one operation is larger than the limit, Armarium asks the user before it commits the transaction: "You cannot undo this operation. Do you want to continue?" If the user says no, Armarium rolls back the transaction.
+- If the changeset of one operation is larger than the limit, Armarium rolls back the transaction and returns `UNDO_LIMIT_EXCEEDED`. The UI asks the user: "You cannot undo this operation. Do you want to continue?" If the user says yes, the UI runs the statement again with `allowNoUndo`, and Armarium clears the history of the table. The MCP server always runs with `allowNoUndo` (it has no undo tool).
 - Saving does not clear the undo history. (If the user undoes an operation after a save, the table becomes dirty again.)
 - A reload or a discard of the working table clears the history.
 
@@ -75,7 +75,7 @@ For details, see [ADR-0006](../adrs/0006-working-copy-edit-model.md).
 |---|---|
 | Save (Ctrl+S) | Write the active table to the original file. For an Excel sheet in M4, this changes to "Save as". |
 | Save all | Save all dirty tables. |
-| Save as | Write to a different file, and connect the source to the new file. |
+| Save as | Write to a different file, and connect the source to the new file. Only text formats (CSV, TSV, TXT) for a CSV or TSV source. For an Excel sheet, see 05. File formats, section 2.2. |
 | Export | Write to a different file. The source does not change. |
 
 ### 5.2 Detection of external changes

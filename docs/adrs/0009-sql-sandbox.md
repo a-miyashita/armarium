@@ -69,3 +69,19 @@ Armarium enables the authorizer when it prepares user SQL. The authorizer allows
 
 - The user cannot use familiar methods such as `CREATE TABLE AS` or temporary views. "Save as new source" and "Export" in the UI replace them.
 - We must maintain the list of allowed functions. The regression tests for refused operations (M3-8) detect problems.
+
+## Amendments
+
+### 2026-10-11: Implementation notes
+
+- The authorizer is active only while Armarium prepares user SQL. Armarium disables it before the
+  statement runs, because the session extension prepares its own SQL during the run. Statements are not
+  prepared again during the run, because only the write connection changes the schema.
+- Classification after the prepare step:
+  - A read-only statement with result columns is a query. Armarium stores the result with
+    `INSERT INTO __arm_res_N SELECT * FROM (<statement>)`. The authorizer allows only this one insert.
+  - Any other statement must write exactly one working table. This rule also refuses `VACUUM` and
+    `VACUUM INTO`, which have no authorizer action code.
+- `EXPLAIN` and `EXPLAIN QUERY PLAN` are allowed. The table-valued functions `json_each` and
+  `json_tree` are allowed. Other table-valued functions (for example, `pragma_table_info`) are refused.
+- User SQL cannot read result tables (`__arm_res_*`), because all internal tables are refused.

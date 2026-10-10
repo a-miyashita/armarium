@@ -23,3 +23,5 @@ For the design decisions, see the [ADR index](../adrs/README.md).
 ## Status
 
 The specifications are **Draft**. The ADRs are **Accepted** (2026-10-11).
+The first implementation (M0 to M5) is done. For the status and the known limits, see [09. Roadmap](09-roadmap.md), section 5.
+ADR-0005, 0006, 0007, 0008, 0009, and 0012 have amendments with the results of the implementation.

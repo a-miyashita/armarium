@@ -54,3 +54,17 @@ Spike M0-6 compares the two candidates with these criteria: scrolling with page 
 - We decide the grid from measured data, so the risk of a wrong selection is lower.
 - Until M0-6 is complete, the grid code in M1 cannot start (M1-9 depends on M0-6).
 - If we select Glide Data Grid, we depend on an alpha version for React 19. In this case, we must watch its maintenance and be ready to change to the other candidate.
+
+## Amendments
+
+### 2026-10-11: Grid selected (spike M0-6)
+
+- We selected **Glide Data Grid 6.0.3** (the last stable version) with **React 18.3**.
+  We did not use React 19, so that we do not depend on the alpha versions of the grid.
+- Reasons: the `getCellContent` API and `updateCells` agree well with page fetches. Cell editing,
+  range selection, copy (TSV), paste, and column resize are built in. The grid scrolls 1 million rows
+  with canvas rendering.
+- How we checked: we ran the application with the real backend (Linux, WebKitGTK, Xvfb). We checked
+  the display, cell editing, header menus, undo and redo, and save. We did not measure RevoGrid.
+- Not checked yet: Japanese input (IME) in WebView2 on Windows. Check it before the first release.
+  If it does not work, change to RevoGrid. Only `ui/src/components/PagedGrid.tsx` depends on the grid.
