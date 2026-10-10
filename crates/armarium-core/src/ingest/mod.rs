@@ -102,8 +102,10 @@ pub fn load_csv(
     opts: &ReadOptions,
     ctl: &LoadControl<'_>,
 ) -> Result<Loaded> {
+    let prof = Profile::new();
     let fingerprint = Fingerprint::of(path)?;
     let (text, mut dialect, uncertain) = read_text(path, opts)?;
+    prof.mark("read and decode");
     let mut warnings = Vec::new();
     if uncertain && crate::workspace::extension(path) == "txt" {
         warnings
@@ -193,6 +195,7 @@ pub fn load_csv(
                 (ctl.progress)(parser.position() as u64, Some(total));
             }
         }
+        prof.mark("parse and stage");
         if ragged > 0 {
             warnings.push(format!("{ragged} row(s) had a different number of fields."));
         }
@@ -213,8 +216,10 @@ pub fn load_csv(
         let (columns, mut w) =
             infer_and_create(conn, id, sql_name, &display, &sql_names, &quoted, opts)?;
         warnings.append(&mut w);
+        prof.mark("infer and create");
         conn.execute_batch(&format!("DROP TABLE {STAGE}"))?;
         create_internal(conn, id, sql_name)?;
+        prof.mark("internal tables");
         (ctl.progress)(total, Some(total));
         Ok(Loaded {
             columns,
@@ -225,6 +230,25 @@ pub fn load_csv(
             fingerprint,
         })
     })
+}
+
+/// Logs the time of each phase of a read (debug level).
+struct Profile(std::cell::Cell<std::time::Instant>);
+
+impl Profile {
+    fn new() -> Profile {
+        Profile(std::cell::Cell::new(std::time::Instant::now()))
+    }
+
+    fn mark(&self, phase: &str) {
+        let now = std::time::Instant::now();
+        let ms = now.duration_since(self.0.get()).as_millis();
+        tracing::debug!(phase, ms, "load");
+        if std::env::var_os("ARMARIUM_PROFILE").is_some() {
+            eprintln!("load: {phase}: {ms} ms");
+        }
+        self.0.set(now);
+    }
 }
 
 fn record_values(rec: &csv::Record) -> (Vec<Option<String>>, Vec<bool>) {
@@ -262,50 +286,42 @@ fn infer_and_create(
     let mut warnings = Vec::new();
     let mut types = vec![LogicalType::Text; n];
     if opts.type_inference && n > 0 {
-        let mut parts = Vec::new();
-        for i in 1..=n {
-            let c = format!("c{i}");
-            parts.push(format!("count({c})"));
-            parts.push(format!(
-                "sum({c} IS NOT NULL AND CAST(CAST({c} AS INTEGER) AS TEXT) IS NOT {c})"
-            ));
-            parts.push(format!(
-                "sum({c} IS NOT NULL AND CAST(CAST({c} AS REAL) AS TEXT) IS NOT {c})"
-            ));
-            parts.push(format!(
-                "sum({c} IS NOT NULL AND date(julianday({c})) IS NOT {c})"
-            ));
-            parts.push(format!(
-                "sum({c} IS NOT NULL AND {c} IS NOT datetime(julianday({c})) \
+        // For each column, try the candidates in order. Each probe stops at the first
+        // value that is not round-trip safe, so most text columns cost almost nothing.
+        let candidates: [(LogicalType, &str); 4] = [
+            (
+                LogicalType::Integer,
+                "CAST(CAST({c} AS INTEGER) AS TEXT) IS NOT {c}",
+            ),
+            (
+                LogicalType::Real,
+                "CAST(CAST({c} AS REAL) AS TEXT) IS NOT {c}",
+            ),
+            (LogicalType::Date, "date(julianday({c})) IS NOT {c}"),
+            (
+                LogicalType::DateTime,
+                "{c} IS NOT datetime(julianday({c})) \
                  AND {c} IS NOT strftime('%Y-%m-%d %H:%M:%f', julianday({c})) \
                  AND {c} IS NOT strftime('%Y-%m-%dT%H:%M:%S', julianday({c})) \
-                 AND {c} IS NOT strftime('%Y-%m-%dT%H:%M:%f', julianday({c})))"
-            ));
-        }
-        let sql = format!("SELECT {} FROM {STAGE}", parts.join(", "));
-        conn.query_row(&sql, [], |r| {
-            for (i, ty) in types.iter_mut().enumerate() {
-                let count: i64 = r.get(i * 5)?;
-                if count == 0 {
-                    continue;
-                }
-                let bad = |k: usize| -> rusqlite::Result<i64> {
-                    Ok(r.get::<_, Option<i64>>(i * 5 + k)?.unwrap_or(0))
-                };
-                *ty = if bad(1)? == 0 {
-                    LogicalType::Integer
-                } else if bad(2)? == 0 {
-                    LogicalType::Real
-                } else if bad(3)? == 0 {
-                    LogicalType::Date
-                } else if bad(4)? == 0 {
-                    LogicalType::DateTime
-                } else {
-                    LogicalType::Text
-                };
+                 AND {c} IS NOT strftime('%Y-%m-%dT%H:%M:%f', julianday({c}))",
+            ),
+        ];
+        let exists = |cond: &str| -> Result<bool> {
+            let sql = format!("SELECT EXISTS (SELECT 1 FROM {STAGE} WHERE {cond})");
+            Ok(conn.query_row(&sql, [], |r| r.get(0))?)
+        };
+        for (i, ty) in types.iter_mut().enumerate() {
+            let c = format!("c{}", i + 1);
+            if !exists(&format!("{c} IS NOT NULL"))? {
+                continue;
             }
-            Ok(())
-        })?;
+            for (cand, bad) in &candidates {
+                if !exists(&format!("{c} IS NOT NULL AND ({})", bad.replace("{c}", &c)))? {
+                    *ty = *cand;
+                    break;
+                }
+            }
+        }
     }
 
     // User overrides (by display name).
