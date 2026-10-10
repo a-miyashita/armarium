@@ -1,5 +1,6 @@
 //! Armarium core: the domain logic that the GUI and the MCP server share ([ADR-0004]).
 
+pub mod db;
 pub mod error;
 pub mod format;
 pub mod fsutil;
