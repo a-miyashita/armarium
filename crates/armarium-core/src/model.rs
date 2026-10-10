@@ -104,7 +104,7 @@ pub struct ColumnSchema {
 #[ts(export)]
 pub enum CellValue {
     Null,
-    Integer(i64),
+    Integer(#[ts(type = "number")] i64),
     Real(f64),
     Text(String),
 }
@@ -243,6 +243,7 @@ pub struct SourceInfo {
     pub file_name: String,
     pub kind: SourceKind,
     pub exists: bool,
+    #[ts(type = "number | null")]
     pub size: Option<u64>,
     #[ts(type = "number | null")]
     pub modified_ms: Option<i64>,
@@ -366,12 +367,16 @@ pub enum EditOp {
     SetCells {
         cells: Vec<CellEdit>,
     },
-    /// Insert rows. `afterRid: null` inserts at the start.
+    /// Insert rows after a row (or before it, with `above`). `afterRid: null` inserts at the start.
     #[serde(rename_all = "camelCase")]
     InsertRows {
         #[ts(type = "number | null")]
         after_rid: Option<i64>,
         count: u32,
+        /// Insert the rows before `afterRid` instead of after it.
+        #[serde(default)]
+        #[ts(optional)]
+        above: Option<bool>,
     },
     DeleteRows {
         #[ts(type = "Array<number>")]

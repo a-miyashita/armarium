@@ -40,13 +40,18 @@ impl SessionFile {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    /// Deletes the database files. The connections must be closed first.
+    pub fn remove_files(&self) {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{suffix}", self.path.display()));
+        }
+    }
 }
 
 impl Drop for SessionFile {
     fn drop(&mut self) {
-        for suffix in ["", "-wal", "-shm"] {
-            let _ = std::fs::remove_file(format!("{}{suffix}", self.path.display()));
-        }
+        self.remove_files();
         let _ = std::fs::remove_file(&self.lock_path);
     }
 }

@@ -3,4 +3,4 @@
 /**
  * A cell value. JSON form: `null`, a number, a string, or a boolean.
  */
-export type CellValue = null | bigint | number | string;
+export type CellValue = null | number | number | string;

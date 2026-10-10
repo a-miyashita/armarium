@@ -231,6 +231,20 @@ impl Engine {
         f(&mut inner)
     }
 
+    /// Closes the session database and deletes its files. Call it when the process
+    /// exits without dropping the engine (the Tauri application does this).
+    /// After this call, the engine cannot be used.
+    pub fn shutdown(&self) {
+        self.interrupt();
+        if let (Ok(a), Ok(b)) = (Connection::open_in_memory(), Connection::open_in_memory()) {
+            let old = std::mem::replace(&mut lock(&self.inner).conn, a);
+            drop(old);
+            let old = std::mem::replace(&mut *lock(&self.reader), b);
+            drop(old);
+            self._session.remove_files();
+        }
+    }
+
     /// Cancels the running operation (a read or a query).
     pub fn interrupt(&self) {
         self.cancel.store(true, Ordering::SeqCst);

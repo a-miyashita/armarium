@@ -173,6 +173,7 @@ fn edits_undo_redo_and_dirty_state() {
             EditOp::InsertRows {
                 after_rid: Some(page.rids[0]),
                 count: 1,
+                above: None,
             },
         )
         .unwrap();
@@ -247,12 +248,28 @@ fn insert_at_start_and_paste() {
             EditOp::InsertRows {
                 after_rid: None,
                 count: 2,
+                above: None,
             },
         )
         .unwrap();
     let page = e.engine.fetch_rows(t, None, 0, 10).unwrap();
     assert_eq!(page.total, 4);
     assert_eq!(page.data[0][2], s("1"));
+    // Insert above the last row.
+    let r = e
+        .engine
+        .apply_edit(
+            t,
+            EditOp::InsertRows {
+                after_rid: Some(page.rids[3]),
+                count: 1,
+                above: Some(true),
+            },
+        )
+        .unwrap();
+    let p2 = e.engine.fetch_rows(t, None, 0, 10).unwrap();
+    assert_eq!(p2.rids[3], r.inserted_rids[0]);
+    e.engine.undo(t).unwrap();
     // Paste 3 rows from the second row: one new row at the end.
     e.engine
         .apply_edit(

@@ -292,15 +292,25 @@ impl Inner {
                 })?;
                 rows_changed = false;
             }
-            EditOp::InsertRows { after_rid, count } => {
+            EditOp::InsertRows {
+                after_rid,
+                count,
+                above,
+            } => {
                 if count == 0 {
                     return Ok(EditResult {
                         table: self.meta(table)?,
                         inserted_rids: vec![],
                     });
                 }
+                let above = above.unwrap_or(false);
                 inserted = self.record_rows(table, false, |i| {
-                    insert_rows(i, table, &t, after_rid, count)
+                    let after = if above {
+                        row_before(i, table, after_rid)?
+                    } else {
+                        after_rid
+                    };
+                    insert_rows(i, table, &t, after, count)
                 })?;
                 rows_changed = true;
             }
@@ -709,6 +719,21 @@ fn convert_all(values: &[(i64, Value)], ty: LogicalType) -> Result<Vec<(i64, Val
                 })
         })
         .collect()
+}
+
+/// The row before a row in file order (`None` for the first row).
+fn row_before(i: &Inner, table: TableId, rid: Option<i64>) -> Result<Option<i64>> {
+    let Some(rid) = rid else { return Ok(None) };
+    let ord = ord_table(table);
+    Ok(i.conn
+        .query_row(
+            &format!(
+                "SELECT rid FROM \"{ord}\" WHERE ord < (SELECT ord FROM \"{ord}\" WHERE rid = ?1) ORDER BY ord DESC LIMIT 1"
+            ),
+            [rid],
+            |r| r.get(0),
+        )
+        .ok())
 }
 
 fn last_rid(i: &Inner, table: TableId) -> Result<Option<i64>> {

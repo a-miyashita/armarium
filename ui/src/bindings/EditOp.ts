@@ -5,7 +5,11 @@ import type { LogicalType } from "./LogicalType";
 /**
  * One grid edit operation (06. Editing, section 2).
  */
-export type EditOp = { "op": "setCells", cells: Array<CellEdit>, } | { "op": "insertRows", afterRid: number | null, count: number, } | { "op": "deleteRows", rids: Array<number>, } | { "op": "paste", anchorRid: number, anchorColumn: string, tsv: string, 
+export type EditOp = { "op": "setCells", cells: Array<CellEdit>, } | { "op": "insertRows", afterRid: number | null, count: number, 
+/**
+ * Insert the rows before `afterRid` instead of after it.
+ */
+above?: boolean, } | { "op": "deleteRows", rids: Array<number>, } | { "op": "paste", anchorRid: number, anchorColumn: string, tsv: string, 
 /**
  * The rids of the rows below the anchor, in display order (the frontend sends them).
  */
