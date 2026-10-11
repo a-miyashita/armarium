@@ -30,7 +30,7 @@ M0 Foundation ──▶ M1 Viewer ──▶ M2 Edit and save ──▶ M3 SQL �
 | M0-1 | Create the Cargo workspace (`armarium-core`, `armarium-mcp`, `src-tauri`). | - |
 | M0-2 | Create React + TS + Vite in `ui/` and connect it to Tauri. Generate TypeScript types with `ts-rs`. | M0-1 |
 | M0-3 | Add `rusqlite` (features `bundled`, `session`, `hooks`, `functions`). Make sure that the SQLite version is 3.42 or later. | M0-1 |
-| M0-4 | GitHub Actions on `windows-latest`: `cargo test`, `clippy`, `fmt`, frontend lint and test, Tauri build. | M0-1, M0-2 |
+| M0-4 | GitHub Actions. CI for pull requests and `main`: `fmt`, `clippy`, and `cargo test` on `windows-latest`, frontend lint and test on `ubuntu-latest`. A release workflow builds the installer for a tag `v*` or a manual run. | M0-1, M0-2 |
 | M0-5 | **Spike**: Record a changeset for a `rowid` table with the session extension (`SQLITE_SESSION_OBJCONFIG_ROWID`), and undo by applying the inverted changeset. If `rusqlite` has no API for this, call it through FFI or change to the trigger method ([ADR-0006](../adrs/0006-working-copy-edit-model.md)). | M0-3 |
 | M0-6 | **Spike**: Compare Glide Data Grid (6.0.4 alpha, React 19) and RevoGrid. Criteria: scrolling with page fetches for 1 million rows, range selection, copy and paste, Japanese input (IME). Select one grid and update [ADR-0005](../adrs/0005-frontend-stack.md). | M0-2 |
 | M0-7 | **Spike**: Make sure that the authorizer allow list allows DML statements and updates of internal tables through internal triggers. Make sure that it refuses DDL, `ATTACH`, `VACUUM`, updates of `rowid`, and references to internal tables ([ADR-0009](../adrs/0009-sql-sandbox.md)). | M0-3 |

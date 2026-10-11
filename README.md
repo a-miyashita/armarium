@@ -57,6 +57,13 @@ cargo run --release -p armarium-core --example load_bench -- 1000000
 | `ARMARIUM_LOG` | Log filter, for example `debug` |
 | `ARMARIUM_PROFILE` | If set, the core prints the time of each phase of a file read to stderr |
 
+### CI and releases
+
+- `.github/workflows/ci.yml` runs the checks for each pull request and each push to `main`.
+  It does not build the installer.
+- `.github/workflows/release.yml` builds the installer. Run it by hand from the Actions tab, or push
+  a tag such as `v0.1.0`. A tag also creates a draft GitHub Release with the installers.
+
 ## MCP server
 
 ```json
