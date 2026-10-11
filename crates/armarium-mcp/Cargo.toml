@@ -1,0 +1,25 @@
+[package]
+name = "armarium-mcp"
+description = "Armarium MCP server (stdio)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "armarium-mcp"
+path = "src/main.rs"
+
+[dependencies]
+armarium-core = { workspace = true }
+rmcp = { version = "3.5", features = ["server", "transport-io", "macros", "schemars"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "sync"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+
+[dev-dependencies]
+tempfile = "3"

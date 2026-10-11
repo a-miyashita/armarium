@@ -1,0 +1,74 @@
+name: CI
+
+# Checks for every pull request and every push to main.
+# The installer is built only by the release workflow (release.yml).
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Pull requests read the cache of main but do not save their own cache.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Rust format
+        run: cargo fmt --all -- --check
+
+      - name: Rust tests (also writes the TypeScript bindings)
+        run: cargo test --workspace
+
+      - name: TypeScript bindings are up to date
+        shell: bash
+        run: git diff --exit-code -- ui/src/bindings
+
+      # Clippy runs after the tests because it reuses the compiled dependencies of the tests.
+      # It also compiles src-tauri, so build errors in the application are found here.
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix ui
+
+      - name: Frontend lint
+        run: npm --prefix ui run lint
+
+      - name: Frontend tests
+        run: npm --prefix ui test

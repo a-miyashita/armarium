@@ -1,0 +1,30 @@
+[package]
+name = "armarium-core"
+description = "Domain logic of Armarium: workspace, ingest, engine, edit, SQL, and persist"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+ts-rs = { workspace = true }
+tracing = { workspace = true }
+uuid = { version = "1", features = ["v7"] }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+encoding_rs = "0.8"
+chardetng = "1"
+calamine = { version = "0.36", features = ["dates"] }
+rust_xlsxwriter = { version = "0.99", features = ["constant_memory"] }
+regex = "1"
+unicode-normalization = "0.1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32_Foundation"] }
+
+[dev-dependencies]
+tempfile = "3"
