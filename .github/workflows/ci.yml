@@ -40,16 +40,17 @@ jobs:
       - name: Rust format
         run: cargo fmt --all -- --check
 
-      # Clippy also compiles src-tauri, so build errors in the application are found here.
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
       - name: Rust tests (also writes the TypeScript bindings)
         run: cargo test --workspace
 
       - name: TypeScript bindings are up to date
         shell: bash
         run: git diff --exit-code -- ui/src/bindings
+
+      # Clippy runs after the tests because it reuses the compiled dependencies of the tests.
+      # It also compiles src-tauri, so build errors in the application are found here.
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
   frontend:
     name: Frontend
