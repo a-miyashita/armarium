@@ -14,7 +14,7 @@
       "cwd": "../ui"
     },
     "devUrl": "http://localhost:1420",
-    "frontendDist": "../ui/dist"
+    "frontendDist": "./dist"
   },
   "app": {
     "windows": [

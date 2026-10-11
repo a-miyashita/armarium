@@ -9,6 +9,20 @@ AI agents can use the same functions through an MCP server (`armarium-mcp`).
 - Specifications: [docs/specs/](docs/specs/README.md)
 - Design decisions: [docs/adrs/](docs/adrs/README.md)
 
+## Install
+
+Windows: download the installer from GitHub Releases.
+
+With Cargo (Windows; Linux is unofficial):
+
+```sh
+cargo install armarium        # the desktop application
+cargo install armarium-mcp    # the MCP server (put it in the same directory as armarium)
+```
+
+Requirements: Rust 1.89 or later. On Windows, the WebView2 runtime. On Linux, the Tauri system
+packages (for example, `libwebkit2gtk-4.1-dev`, `libxdo-dev`, and `libssl-dev`).
+
 ## Repository
 
 | Path | Contents |
@@ -32,8 +46,13 @@ cargo test --workspace
 npm --prefix ui test
 npm --prefix ui run lint
 
-# Run the application in development mode (from the repository root)
-ui/node_modules/.bin/tauri dev
+# Build the frontend. The application embeds it from src-tauri/dist, so Rust needs it
+# (cargo build, test, and clippy fail without it).
+npm --prefix ui run build
+
+# Run the application in development mode (from the repository root).
+# --no-default-features loads the dev server instead of the embedded frontend.
+ui/node_modules/.bin/tauri dev -- --no-default-features
 
 # Build the installer (Windows). The MCP server is included as a sidecar.
 cargo build --release -p armarium-mcp
@@ -62,7 +81,11 @@ cargo run --release -p armarium-core --example load_bench -- 1000000
 - `.github/workflows/ci.yml` runs the checks for each pull request and each push to `main`.
   It does not build the installer.
 - `.github/workflows/release.yml` builds the installer. Run it by hand from the Actions tab, or push
-  a tag such as `v0.1.0`. A tag also creates a draft GitHub Release with the installers.
+  a tag such as `v0.1.0`. A tag also creates a draft GitHub Release with the installers, and
+  publishes `armarium-core`, `armarium-mcp`, and `armarium` to crates.io after the approval of the
+  `release` environment ([ADR-0015](docs/adrs/0015-cargo-install-distribution.md)).
+  Before a release, set the same version in `Cargo.toml` (`[workspace.package]` and the `armarium-core`
+  dependency) and in `src-tauri/tauri.conf.json`. The workflow checks that the tag matches them.
 
 ## MCP server
 

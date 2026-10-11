@@ -37,6 +37,18 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
+      # The application embeds the built frontend (src-tauri/dist), so it must exist before Rust builds.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build the frontend
+        run: |
+          npm ci --prefix ui
+          npm --prefix ui run build
+
       - name: Rust format
         run: cargo fmt --all -- --check
 

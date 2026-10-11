@@ -2,6 +2,9 @@ name: Release
 
 # Builds the Windows installer.
 # - A push of a tag `v*` also creates a draft GitHub Release with the installers.
+# - A push of a tag `v*` also publishes the crates to crates.io (`cargo install armarium`)
+#   after the approval of the `release` environment, and then tests `cargo install` (ADR-0015).
+# The tag text is never put into a script through ${{ }}; it is passed with `env`.
 # - A manual run only uploads the installers as a workflow artifact.
 
 on:
@@ -17,8 +20,45 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  verify:
+    name: Check the tag and the versions
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.info.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # origin/main is needed for the check
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check the tag against the versions
+        id: info
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          meta="$(cargo metadata --no-deps --format-version 1)"
+          # Without --no-deps, --locked fails when Cargo.lock needs an update.
+          cargo metadata --locked --format-version 1 > /dev/null || { echo "::error::Cargo.lock is not up to date"; exit 1; }
+          version="$(jq -r '.packages[] | select(.name == "armarium") | .version' <<<"$meta")"
+          core_req="$(jq -r '.packages[] | select(.name == "armarium") | [.dependencies[] | select(.name == "armarium-core" and .kind == null)] | first | .req' <<<"$meta")"
+          mcp_req="$(jq -r '.packages[] | select(.name == "armarium-mcp") | [.dependencies[] | select(.name == "armarium-core" and .kind == null)] | first | .req' <<<"$meta")"
+          tauri_version="$(jq -r .version src-tauri/tauri.conf.json)"
+          fail=0
+          [ "$TAG" = "v$version" ] || { echo "::error::The tag $TAG is not v$version (Cargo.toml)"; fail=1; }
+          [ "$core_req" = "^$version" ] || { echo "::error::armarium depends on armarium-core $core_req, not ^$version"; fail=1; }
+          [ "$mcp_req" = "^$version" ] || { echo "::error::armarium-mcp depends on armarium-core $mcp_req, not ^$version"; fail=1; }
+          [ "$tauri_version" = "$version" ] || { echo "::error::tauri.conf.json has version $tauri_version, not $version"; fail=1; }
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::The tagged commit is not on main"; fail=1; }
+          [ "$fail" = 0 ]
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build installer (Windows)
+    needs: verify
+    # Also run for a manual run, where `verify` is skipped.
+    if: ${{ !cancelled() && (needs.verify.result == 'success' || needs.verify.result == 'skipped') }}
     runs-on: windows-latest
     permissions:
       contents: write
@@ -67,5 +107,99 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --generate-notes \
-            target/release/bundle/nsis/*.exe target/release/bundle/msi/*.msi
+          # A re-run of the workflow must not fail because the draft release exists.
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" --clobber \
+              target/release/bundle/nsis/*.exe target/release/bundle/msi/*.msi
+          else
+            gh release create "$GITHUB_REF_NAME" --draft --verify-tag --generate-notes \
+              target/release/bundle/nsis/*.exe target/release/bundle/msi/*.msi
+          fi
+
+  publish:
+    name: Publish to crates.io
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    # The environment has a required reviewer. The run waits here until they approve.
+    environment: release
+    permissions:
+      contents: read
+      id-token: write # trusted publishing to crates.io
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      # The package of `armarium` contains the built frontend (src-tauri/dist).
+      - name: Build the frontend
+        run: |
+          npm ci --prefix ui
+          npm --prefix ui run build
+
+      # `armarium` is published with --no-verify (see below), so check the package files here,
+      # before anything is published.
+      - name: Check the files of the armarium package
+        run: |
+          set -euo pipefail
+          cargo package -p armarium --no-verify --allow-dirty --list > package-files.txt
+          for f in dist/index.html icons/icon.ico icons/icon.png capabilities/default.json tauri.conf.json build.rs src/main.rs; do
+            grep -qx "$f" package-files.txt || { echo "::error::$f is not in the package"; exit 1; }
+          done
+
+      # Pinned by commit SHA (v1.0.5) because this action receives the OIDC token.
+      - name: Get a short-lived crates.io token
+        id: auth
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18
+
+      # Crates that are already on crates.io are skipped, so a re-run continues after a partial failure.
+      # `cargo publish` waits until each crate is available in the index.
+      # --no-verify for armarium: the build script of Tauri writes src-tauri/gen, which fails the
+      # verification step of `cargo publish`. The Windows build above compiles the same sources,
+      # and the smoke job below installs the published crate.
+      - name: Publish the crates
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          publish() {
+            name="$1"; shift
+            code="$(curl -s -o /dev/null -w '%{http_code}' -A armarium-release "https://crates.io/api/v1/crates/$name/$VERSION")"
+            if [ "$code" = 200 ]; then
+              echo "$name $VERSION is already published; skipping"
+            else
+              cargo publish -p "$name" "$@"
+            fi
+          }
+          publish armarium-core
+          publish armarium-mcp
+          publish armarium --no-verify
+
+  smoke:
+    name: Test cargo install (Windows)
+    needs: [verify, publish]
+    runs-on: windows-latest
+    steps:
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install from crates.io
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          # The crates.io index can lag for a few minutes after a publish.
+          for attempt in 1 2 3 4 5 6; do
+            if cargo install armarium armarium-mcp --version "$VERSION" --locked --root "$RUNNER_TEMP/armarium"; then
+              ls "$RUNNER_TEMP/armarium/bin"
+              exit 0
+            fi
+            echo "install failed (attempt $attempt); retrying in 30 s"
+            sleep 30
+          done
+          exit 1
