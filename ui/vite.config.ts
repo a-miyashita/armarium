@@ -12,6 +12,9 @@ export default defineConfig({
     watch: { ignored: ["**/src-tauri/**", "**/target/**"] },
   },
   build: {
+    // Inside src-tauri, so that the crate package contains the frontend.
+    outDir: "../src-tauri/dist",
+    emptyOutDir: true,
     target: "es2022",
     chunkSizeWarningLimit: 2000,
   },

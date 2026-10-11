@@ -1,6 +1,7 @@
 /target
 node_modules/
 /ui/dist
+/src-tauri/dist
 /src-tauri/gen/schemas
 *.armarium-*.tmp
 /src-tauri/binaries

@@ -4,7 +4,22 @@ description = "Armarium: a desktop editor for tabular data with SQL"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 rust-version.workspace = true
+readme = "../README.md"
+# `cargo install armarium` builds from the files in the package, so the package must
+# contain the built frontend (`dist`). `ui/` is built before `cargo publish` (release.yml).
+include = [
+  "/src/**",
+  "/icons/**",
+  "/capabilities/**",
+  "/dist/**",
+  "/build.rs",
+  "/tauri.conf.json",
+  "/Cargo.toml",
+]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -21,5 +36,7 @@ tracing-appender = "0.2"
 notify = "8"
 
 [features]
-# Tauri uses this feature for production builds.
+# Serves the embedded frontend (`dist`) instead of the dev server. `cargo install` does not use the
+# Tauri CLI, so this feature is on by default. `tauri dev` turns it off (see README).
+default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

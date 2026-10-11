@@ -18,6 +18,7 @@ This directory records the design decisions of Armarium. For the format, see [AD
 | [0012](0012-workspace-persistence.md) | Store the workspace in a JSON file | Accepted |
 | [0013](0013-mcp-server-mode.md) | Give the MCP server as a separate stdio binary | Accepted |
 | [0014](0014-paged-grid-ipc.md) | The grid fetches only the visible rows through IPC | Accepted |
+| [0015](0015-cargo-install-distribution.md) | Publish to crates.io so that `cargo install armarium` works | Accepted |
 
 ## Status values
 

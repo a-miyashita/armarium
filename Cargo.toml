@@ -6,10 +6,13 @@ members = ["crates/armarium-core", "crates/armarium-mcp", "src-tauri"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+repository = "https://github.com/a-miyashita/armarium"
+keywords = ["csv", "excel", "sql", "sqlite", "editor"]
+categories = ["command-line-utilities", "gui"]
 rust-version = "1.89"
 
 [workspace.dependencies]
-armarium-core = { path = "crates/armarium-core" }
+armarium-core = { path = "crates/armarium-core", version = "0.1.0" }
 rusqlite = { version = "0.40", default-features = false, features = ["bundled", "session", "hooks", "functions", "cache", "column_metadata", "limits"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
