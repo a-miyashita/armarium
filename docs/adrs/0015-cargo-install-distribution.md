@@ -43,3 +43,15 @@ We want users to install Armarium with `cargo install armarium` (Windows; Linux 
 - The crate versions must match across the workspace and `src-tauri/tauri.conf.json`. The `verify` job checks this.
 - Trusted publishing works per crate, so the first release is done by hand. Publish the three crates with a personal token (build the frontend first), set a trusted publisher on each crate (repository `a-miyashita/armarium`, workflow `release.yml`, environment `release`), and then push the tag. Before the manual publish, run `cargo package -p armarium --no-verify --allow-dirty --list` and check that `dist/index.html` is in the list. The workflow skips the published crates and runs the `smoke` job.
 - One-time settings outside the repository: the `release` environment with a required reviewer, restricted to `v*` tags.
+
+## Amendments
+
+### 2026-10-11: LLVM is a build requirement
+
+`cargo install armarium` failed on a machine without LLVM: `Unable to find libclang`.
+
+- The `session` feature of `rusqlite` (used for undo, see [ADR-0006](0006-working-copy-edit-model.md)) turns on `buildtime_bindgen` in `libsqlite3-sys`. The pre-generated bindings do not have the session API, so `bindgen` runs at build time and needs `libclang`. The `bundled` feature does not remove this need.
+- CI and the `smoke` job did not find this, because the GitHub runners have LLVM installed.
+- The README now lists LLVM as a requirement (Windows: `winget install LLVM.LLVM` and `LIBCLANG_PATH`; Linux: `libclang-dev`).
+- We could remove the requirement by not using `session`. This needs a new undo design and is not in this change.
+
