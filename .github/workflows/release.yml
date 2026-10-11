@@ -180,7 +180,8 @@ jobs:
           }
           publish armarium-core
           publish armarium-mcp
-          publish armarium --no-verify
+          # --allow-dirty: src-tauri/dist is ignored by git but is in the package (include).
+          publish armarium --no-verify --allow-dirty
 
   smoke:
     name: Test cargo install (Windows)

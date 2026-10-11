@@ -22,6 +22,7 @@ We want users to install Armarium with `cargo install armarium` (Windows; Linux 
    - The `publish` job uses the GitHub environment `release`, which has a required reviewer. A tag alone never publishes, because crates.io versions cannot be deleted.
    - Authentication is crates.io trusted publishing (OIDC). No long-lived token is stored.
    - The job skips a crate that is already on crates.io, so a re-run continues after a partial failure.
+   - `armarium` is published with `--allow-dirty`, because `cargo` treats the ignored `src-tauri/dist` as an uncommitted change.
    - `armarium` is published with `--no-verify`. The build script of Tauri writes `src-tauri/gen`, and the verification step of `cargo publish` rejects this. Instead, the job checks that the package file list has the required files, and a `smoke` job runs `cargo install armarium armarium-mcp` from crates.io on Windows after the publish.
 5. CI builds the frontend before the Rust steps, because the application now embeds `src-tauri/dist`.
 6. `armarium-mcp` is installed separately. The application finds it next to its own executable, so both go to the same Cargo bin directory.
@@ -40,5 +41,5 @@ We want users to install Armarium with `cargo install armarium` (Windows; Linux 
 - A crates.io release cannot be changed. A mistake needs a new version.
 - `cargo build`, `cargo test`, and `cargo clippy` need `npm --prefix ui run build` first.
 - The crate versions must match across the workspace and `src-tauri/tauri.conf.json`. The `verify` job checks this.
-- Trusted publishing works per crate, so the first release is done by hand. Publish the three crates with a personal token (build the frontend first), set a trusted publisher on each crate (repository `a-miyashita/armarium`, workflow `release.yml`, environment `release`), and then push the tag. Before the manual publish, run `cargo package -p armarium --no-verify --list` and check that `dist/index.html` is in the list. The workflow skips the published crates and runs the `smoke` job.
+- Trusted publishing works per crate, so the first release is done by hand. Publish the three crates with a personal token (build the frontend first), set a trusted publisher on each crate (repository `a-miyashita/armarium`, workflow `release.yml`, environment `release`), and then push the tag. Before the manual publish, run `cargo package -p armarium --no-verify --allow-dirty --list` and check that `dist/index.html` is in the list. The workflow skips the published crates and runs the `smoke` job.
 - One-time settings outside the repository: the `release` environment with a required reviewer, restricted to `v*` tags.
