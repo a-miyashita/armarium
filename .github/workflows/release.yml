@@ -1,12 +1,11 @@
 name: Release
 
 # Builds the Windows installers (NSIS, MSI) and the Linux packages (AppImage, deb).
-# - A push of a tag `v*` also signs the Windows installers with SignPath (if it is set up, ADR-0016)
-#   and creates a draft GitHub Release with the files and their SHA-256 checksums.
+# - A push of a tag `v*` also creates a draft GitHub Release with the files and their SHA-256 checksums.
 # - A push of a tag `v*` also publishes the crates to crates.io (`cargo install armarium`)
 #   after the approval of the `release` environment, and then tests `cargo install` (ADR-0015).
 # The tag text is never put into a script through ${{ }}; it is passed with `env`.
-# - A manual run only uploads the files as a workflow artifact. They are not signed.
+# - A manual run only uploads the files as a workflow artifact. The installers are not signed (ADR-0016).
 
 on:
   push:
@@ -61,8 +60,6 @@ jobs:
     # Also run for a manual run, where `verify` is skipped.
     if: ${{ !cancelled() && (needs.verify.result == 'success' || needs.verify.result == 'skipped') }}
     runs-on: windows-latest
-    outputs:
-      artifact-id: ${{ steps.upload.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v4
 
@@ -94,48 +91,16 @@ jobs:
       - name: Tauri build (installers)
         run: ui/node_modules/.bin/tauri build --config src-tauri/tauri.bundle.json
 
-      # SignPath signs the files of one flat ZIP file (see ADR-0016).
       - name: Collect the installers
         shell: bash
         run: |
           mkdir -p out/windows
           cp target/release/bundle/nsis/*.exe target/release/bundle/msi/*.msi out/windows/
 
-      - name: Upload the unsigned installers
-        id: upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: armarium-windows-unsigned
-          path: out/windows/*
-          if-no-files-found: error
-
-  # Signing is on only when the repository variable SIGNPATH_ORGANIZATION_ID is set (ADR-0016).
-  # It runs only for a tag, because the release signing policy of SignPath allows only tag builds.
-  sign-windows:
-    name: Sign the Windows installers (SignPath)
-    needs: build-windows
-    if: ${{ startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_ORGANIZATION_ID != '' }}
-    runs-on: ubuntu-latest
-    # No GitHub environment here: the signing policy of SignPath asks for the approval (ADR-0016).
-    permissions:
-      contents: read
-      actions: read # SignPath reads the artifact of this run
-    steps:
-      # Pinned by commit SHA (v3.0) because this action receives the API token.
-      - uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
-          github-artifact-id: ${{ needs.build-windows.outputs.artifact-id }}
-          wait-for-completion: true
-          output-artifact-directory: signed
-
       - uses: actions/upload-artifact@v4
         with:
-          name: armarium-windows-signed
-          path: signed/*
+          name: armarium-windows
+          path: out/windows/*
           if-no-files-found: error
 
   build-linux:
@@ -194,10 +159,8 @@ jobs:
 
   release:
     name: Collect the files and create the release
-    needs: [verify, build-windows, sign-windows, build-linux]
-    if: >-
-      ${{ !cancelled() && needs.build-windows.result == 'success' && needs.build-linux.result == 'success'
-      && (needs.sign-windows.result == 'success' || needs.sign-windows.result == 'skipped') }}
+    needs: [verify, build-windows, build-linux]
+    if: ${{ !cancelled() && needs.build-windows.result == 'success' && needs.build-linux.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -207,17 +170,9 @@ jobs:
           name: armarium-linux
           path: files
 
-      # Use the signed installers when they exist.
       - uses: actions/download-artifact@v4
-        if: ${{ needs.sign-windows.result == 'success' }}
         with:
-          name: armarium-windows-signed
-          path: files
-
-      - uses: actions/download-artifact@v4
-        if: ${{ needs.sign-windows.result != 'success' }}
-        with:
-          name: armarium-windows-unsigned
+          name: armarium-windows
           path: files
 
       - name: Make the checksums
@@ -247,9 +202,7 @@ jobs:
 
   publish:
     name: Publish to crates.io
-    # An explicit status check: the implicit success() would skip this job when the optional
-    # `sign-windows` job (an ancestor) is skipped.
-    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && needs.verify.result == 'success' && needs.release.result == 'success' }}
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: [verify, release]
     runs-on: ubuntu-latest
     # The environment has a required reviewer. The run waits here until they approve.
@@ -317,7 +270,6 @@ jobs:
   smoke:
     name: Test cargo install (Windows)
     needs: [verify, publish]
-    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     runs-on: windows-latest
     steps:
       - uses: dtolnay/rust-toolchain@stable
