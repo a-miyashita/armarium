@@ -20,11 +20,6 @@ Download the files from GitHub Releases ([ADR-0016](docs/adrs/0016-installers-an
 
 Check a download with `SHA256SUMS.txt` in the same release. macOS has no official build yet.
 
-## Code signing policy
-
-Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
-See the [Code Signing Policy](https://384t.net/tools/armarium/code-signing/) for what is signed, who approves a signing request, and the privacy policy.
-
 With Cargo:
 
 ```sh
@@ -44,6 +39,16 @@ Requirements:
 - Linux: the Tauri system packages (for example, `libwebkit2gtk-4.1-dev`, `libxdo-dev`, and `libssl-dev`).
 
 The released installers and packages need none of these.
+
+## Code signing policy
+
+The Windows installers (`.exe` and `.msi`) are not signed now, because code signing costs too much for this project.
+
+- Windows SmartScreen can show a warning ("Windows protected your PC") when you run an installer for
+  the first time. Click "More info", then "Run anyway".
+- To check that a file is the one that we published, compare its SHA-256 hash with `SHA256SUMS.txt` in
+  the same release.
+- We plan to sign the installers when we have a code signing certificate. We will update this section then.
 
 ## Repository
 
@@ -104,8 +109,8 @@ cargo run --release -p armarium-core --example load_bench -- 1000000
 - `.github/workflows/ci.yml` runs the checks for each pull request and each push to `main`.
   It does not build the installer.
 - `.github/workflows/release.yml` builds the installer. Run it by hand from the Actions tab, or push
-  a tag such as `v0.1.0`. A tag also signs the Windows installers (SignPath), creates a draft GitHub
-  Release with the installers, the Linux packages, and `SHA256SUMS.txt`, and
+  a tag such as `v0.1.0`. A tag also creates a draft GitHub
+  Release with the installers (not signed), the Linux packages, and `SHA256SUMS.txt`, and
   publishes `armarium-core`, `armarium-mcp`, and `armarium` to crates.io after the approval of the
   `release` environment ([ADR-0015](docs/adrs/0015-cargo-install-distribution.md)).
   Before a release, set the same version in `Cargo.toml` (`[workspace.package]` and the `armarium-core`

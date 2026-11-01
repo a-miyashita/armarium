@@ -19,7 +19,7 @@ This directory records the design decisions of Armarium. For the format, see [AD
 | [0013](0013-mcp-server-mode.md) | Give the MCP server as a separate stdio binary | Accepted |
 | [0014](0014-paged-grid-ipc.md) | The grid fetches only the visible rows through IPC | Accepted |
 | [0015](0015-cargo-install-distribution.md) | Publish to crates.io so that `cargo install armarium` works | Accepted |
-| [0016](0016-installers-and-code-signing.md) | Distribute signed Windows installers and Linux packages | Proposed |
+| [0016](0016-installers-and-code-signing.md) | Distribute unsigned Windows installers and Linux packages | Proposed |
 
 ## Status values
 
