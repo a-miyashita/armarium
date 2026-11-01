@@ -27,8 +27,15 @@ cargo install armarium        # the desktop application
 cargo install armarium-mcp    # the MCP server (put it in the same directory as armarium)
 ```
 
-Requirements: Rust 1.89 or later. On Windows, the WebView2 runtime. On Linux, the Tauri system
-packages (for example, `libwebkit2gtk-4.1-dev`, `libxdo-dev`, and `libssl-dev`).
+Requirements to build from source (`cargo install` and development): Rust 1.89 or later, and
+libclang. SQLite is built with `bindgen` (the `session` feature of `rusqlite`), which needs it.
+
+- Windows: install LLVM (for example, `winget install LLVM.LLVM`). If the build cannot find it, set
+  `LIBCLANG_PATH` to the `bin` directory of LLVM. The WebView2 runtime is also required to run the application.
+- Linux: install `libclang-dev` and the Tauri system packages (for example, `libwebkit2gtk-4.1-dev`,
+  `libxdo-dev`, and `libssl-dev`).
+
+The released installers and packages need none of these.
 
 ## Repository
 
