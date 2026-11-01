@@ -101,7 +101,7 @@ M0 Foundation ──▶ M1 Viewer ──▶ M2 Edit and save ──▶ M3 SQL �
 
 - Make an NSIS installer (per-user installation) and an MSI with the Tauri bundler.
 - Install WebView2 with the bootstrapper (Windows 11 includes it).
-- Code signing: after we get a signing certificate (not decided).
+- Code signing: not done for now. The installers are unsigned (ADR-0016).
 - Automatic update: we will consider `tauri-plugin-updater` in M6 or later.
 
 ## 4. Open questions
@@ -113,7 +113,7 @@ M0 Foundation ──▶ M1 Viewer ──▶ M2 Edit and save ──▶ M3 SQL �
 | Q3 | Do we also give the difference between NULL and an empty string for CSV? | **Decided for now**: no. An empty field is NULL. The display setting can show NULL. |
 | Q4 | Do we allow temporary views (`CREATE TEMP VIEW`) for work in a query tab? | **Decided for now**: no (ADR-0009). |
 | Q5 | Check the license notices (SQLite: public domain; calamine, umya-spreadsheet, ts-rs: MIT; license of the selected grid) and generate a NOTICE file. | M0 |
-| Q6 | Method of code signing | Before the first release |
+| Q6 | Method of code signing | **Decided for now**: no signing. Distribute an unsigned MSI and `cargo install` (ADR-0016). |
 
 ## 5. Implementation status (2026-10-11)
 
@@ -131,5 +131,5 @@ Known limits of the first implementation:
 
 - The core error messages are in English. The UI translates the titles of the dialogs.
 - Files are decoded in memory (approximately three times the file size).
-- Code signing (Q6) and the NOTICE file (Q5) are not done.
+- Code signing (Q6, unsigned for now) and the NOTICE file (Q5) are not done.
 
