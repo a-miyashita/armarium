@@ -2,11 +2,10 @@ name: Release
 
 # Builds the Windows installers (NSIS, MSI) and the Linux packages (AppImage, deb).
 # - A push of a tag `v*` also creates a draft GitHub Release with the files and their SHA-256 checksums.
-#   The Windows installers are not signed (ADR-0016).
 # - A push of a tag `v*` also publishes the crates to crates.io (`cargo install armarium`)
 #   after the approval of the `release` environment, and then tests `cargo install` (ADR-0015).
 # The tag text is never put into a script through ${{ }}; it is passed with `env`.
-# - A manual run only uploads the files as a workflow artifact.
+# - A manual run only uploads the files as a workflow artifact. The installers are not signed (ADR-0016).
 
 on:
   push:
@@ -98,8 +97,7 @@ jobs:
           mkdir -p out/windows
           cp target/release/bundle/nsis/*.exe target/release/bundle/msi/*.msi out/windows/
 
-      - name: Upload the installers
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: armarium-windows
           path: out/windows/*
@@ -162,7 +160,6 @@ jobs:
   release:
     name: Collect the files and create the release
     needs: [verify, build-windows, build-linux]
-    # Also run for a manual run, where `verify` is skipped.
     if: ${{ !cancelled() && needs.build-windows.result == 'success' && needs.build-linux.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
@@ -273,7 +270,6 @@ jobs:
   smoke:
     name: Test cargo install (Windows)
     needs: [verify, publish]
-    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     runs-on: windows-latest
     steps:
       - uses: dtolnay/rust-toolchain@stable
