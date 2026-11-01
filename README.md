@@ -11,9 +11,16 @@ AI agents can use the same functions through an MCP server (`armarium-mcp`).
 
 ## Install
 
-Windows: download the installer from GitHub Releases.
+Download the files from GitHub Releases ([ADR-0016](docs/adrs/0016-installers-and-code-signing.md)).
 
-With Cargo (Windows; Linux is unofficial):
+| OS | File | Note |
+|---|---|---|
+| Windows | `.exe` (NSIS) or `.msi` | The `.exe` installs for the current user and needs no administrator rights. The `.msi` is for managed deployment. |
+| Linux (x86_64) | `.AppImage` or `.deb` | Built on Ubuntu 22.04. Not signed. |
+
+Check a download with `SHA256SUMS.txt` in the same release. macOS has no official build yet.
+
+With Cargo:
 
 ```sh
 cargo install armarium        # the desktop application
@@ -30,6 +37,8 @@ Requirements:
   - Linux: `libclang-dev`.
 - Windows: the WebView2 runtime and the MSVC build tools.
 - Linux: the Tauri system packages (for example, `libwebkit2gtk-4.1-dev`, `libxdo-dev`, and `libssl-dev`).
+
+The released installers and packages need none of these.
 
 ## Repository
 
@@ -63,6 +72,7 @@ npm --prefix ui run build
 ui/node_modules/.bin/tauri dev -- --no-default-features
 
 # Build the installer (Windows). The MCP server is included as a sidecar.
+# On Linux, use `--bundles appimage,deb` and the sidecar name `armarium-mcp-<target triple>`.
 cargo build --release -p armarium-mcp
 mkdir -p src-tauri/binaries
 cp target/release/armarium-mcp.exe src-tauri/binaries/armarium-mcp-x86_64-pc-windows-msvc.exe
@@ -89,7 +99,8 @@ cargo run --release -p armarium-core --example load_bench -- 1000000
 - `.github/workflows/ci.yml` runs the checks for each pull request and each push to `main`.
   It does not build the installer.
 - `.github/workflows/release.yml` builds the installer. Run it by hand from the Actions tab, or push
-  a tag such as `v0.1.0`. A tag also creates a draft GitHub Release with the installers, and
+  a tag such as `v0.1.0`. A tag also signs the Windows installers (SignPath), creates a draft GitHub
+  Release with the installers, the Linux packages, and `SHA256SUMS.txt`, and
   publishes `armarium-core`, `armarium-mcp`, and `armarium` to crates.io after the approval of the
   `release` environment ([ADR-0015](docs/adrs/0015-cargo-install-distribution.md)).
   Before a release, set the same version in `Cargo.toml` (`[workspace.package]` and the `armarium-core`
