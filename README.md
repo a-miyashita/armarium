@@ -11,19 +11,18 @@ AI agents can use the same functions through an MCP server (`armarium-mcp`).
 
 ## Install
 
-Download the files from GitHub Releases ([ADR-0016](docs/adrs/0016-installers-and-code-signing.md)).
+**Windows**: download the `.msi` file from [GitHub Releases](https://github.com/a-miyashita/armarium/releases/latest).
 
-| OS | File | Note |
-|---|---|---|
-| Windows | `.exe` (NSIS) or `.msi` | The `.exe` installs for the current user and needs no administrator rights. The `.msi` is for managed deployment. |
-| Linux (x86_64) | `.AppImage` or `.deb` | Built on Ubuntu 22.04. Not signed. |
+The installer is **not signed** ([ADR-0016](docs/adrs/0016-installers-and-code-signing.md)). Windows SmartScreen can show
+"Windows protected your PC". To continue, click "More info", and then "Run anyway". To check the download, compare the
+SHA-256 value of the file with `SHA256SUMS.txt` in the same release:
 
-Check a download with `SHA256SUMS.txt` in the same release. macOS has no official build yet.
+```powershell
+Get-FileHash .\Armarium_<version>_x64_en-US.msi -Algorithm SHA256
+```
 
-## Code signing policy
-
-Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
-See the [Code Signing Policy](https://384t.net/tools/armarium/code-signing/) for what is signed, who approves a signing request, and the privacy policy.
+The release has other files (an NSIS `.exe`, a Linux `.AppImage` and `.deb`). We give them as they are, without support.
+macOS has no official build.
 
 With Cargo:
 
@@ -104,8 +103,8 @@ cargo run --release -p armarium-core --example load_bench -- 1000000
 - `.github/workflows/ci.yml` runs the checks for each pull request and each push to `main`.
   It does not build the installer.
 - `.github/workflows/release.yml` builds the installer. Run it by hand from the Actions tab, or push
-  a tag such as `v0.1.0`. A tag also signs the Windows installers (SignPath), creates a draft GitHub
-  Release with the installers, the Linux packages, and `SHA256SUMS.txt`, and
+  a tag such as `v0.1.0`. A tag also creates a draft GitHub Release with the installers, the Linux
+  packages, and `SHA256SUMS.txt`, and
   publishes `armarium-core`, `armarium-mcp`, and `armarium` to crates.io after the approval of the
   `release` environment ([ADR-0015](docs/adrs/0015-cargo-install-distribution.md)).
   Before a release, set the same version in `Cargo.toml` (`[workspace.package]` and the `armarium-core`
