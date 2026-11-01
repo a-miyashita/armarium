@@ -20,6 +20,11 @@ Download the files from GitHub Releases ([ADR-0016](docs/adrs/0016-installers-an
 
 Check a download with `SHA256SUMS.txt` in the same release. macOS has no official build yet.
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
+See the [Code Signing Policy](https://384t.net/tools/armarium/code-signing/) for what is signed, who approves a signing request, and the privacy policy.
+
 With Cargo:
 
 ```sh
