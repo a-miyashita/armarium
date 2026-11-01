@@ -27,13 +27,16 @@ cargo install armarium        # the desktop application
 cargo install armarium-mcp    # the MCP server (put it in the same directory as armarium)
 ```
 
-Requirements to build from source (`cargo install` and development): Rust 1.89 or later, and
-libclang. SQLite is built with `bindgen` (the `session` feature of `rusqlite`), which needs it.
+Requirements:
 
-- Windows: install LLVM (for example, `winget install LLVM.LLVM`). If the build cannot find it, set
-  `LIBCLANG_PATH` to the `bin` directory of LLVM. The WebView2 runtime is also required to run the application.
-- Linux: install `libclang-dev` and the Tauri system packages (for example, `libwebkit2gtk-4.1-dev`,
-  `libxdo-dev`, and `libssl-dev`).
+- Rust 1.89 or later.
+- LLVM (`libclang`). The build needs it, because the `session` feature of `rusqlite` generates the
+  SQLite bindings at build time.
+  - Windows: `winget install LLVM.LLVM`, then set the environment variable `LIBCLANG_PATH` to the folder
+    that has `libclang.dll`, for example `C:\Program Files\LLVM\bin`. Open a new terminal.
+  - Linux: `libclang-dev`.
+- Windows: the WebView2 runtime and the MSVC build tools.
+- Linux: the Tauri system packages (for example, `libwebkit2gtk-4.1-dev`, `libxdo-dev`, and `libssl-dev`).
 
 The released installers and packages need none of these.
 
@@ -48,8 +51,8 @@ The released installers and packages need none of these.
 
 ## Development
 
-Requirements: Rust (stable, 1.89 or later) and Node.js 22. On Windows, the WebView2 runtime.
-On Linux, the Tauri system packages (for example, `libwebkit2gtk-4.1-dev`).
+Requirements: Rust (stable, 1.89 or later), Node.js 22, and LLVM (`libclang`, see [Install](#install)).
+On Windows, the WebView2 runtime. On Linux, the Tauri system packages (for example, `libwebkit2gtk-4.1-dev`).
 
 ```sh
 # Frontend dependencies (one time)
