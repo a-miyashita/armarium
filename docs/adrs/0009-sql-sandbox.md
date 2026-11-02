@@ -85,3 +85,14 @@ Armarium enables the authorizer when it prepares user SQL. The authorizer allows
 - `EXPLAIN` and `EXPLAIN QUERY PLAN` are allowed. The table-valued functions `json_each` and
   `json_tree` are allowed. Other table-valued functions (for example, `pragma_table_info`) are refused.
 - User SQL cannot read result tables (`__arm_res_*`), because all internal tables are refused.
+
+### 2026-11-02: "Save as scratch" replaces "Save as new source"
+
+- The sentence in "Consequences" says that "Save as new source" and "Export" replace `CREATE TABLE AS` and
+  temporary views. "Save as new source" is removed. Reason: it asked for a file name and a folder, but the
+  result was also registered in the workspace. Users did not understand the difference from "Export".
+- The replacement is "Save as scratch". One click writes the result to a CSV file with an automatic name
+  (`scratch_01`, `scratch_02`, …) in a directory that Armarium owns, and registers it in the "Scratch" group.
+  The user can query it, edit it, export it, and move it to a normal file with "Save as".
+- The sandbox does not change. SQL still cannot create tables or write files. Rust code writes the file.
+- For the full behavior, see section 6 of [04. Workspace](../specs/04-workspace.md).

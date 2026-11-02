@@ -64,6 +64,23 @@ fn init_logs() -> Option<tracing_appender::non_blocking::WorkerGuard> {
     }
 }
 
+/// Deletes unused scratch files at start, and saves scratch tables after a pause in editing.
+fn start_scratch_tasks(engine: Arc<Engine>) {
+    std::thread::spawn(move || {
+        match engine.cleanup_scratch() {
+            Ok(0) => {}
+            Ok(n) => tracing::info!("deleted {n} unused scratch files"),
+            Err(e) => tracing::warn!("cannot clean up the scratch directory: {e}"),
+        }
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            if let Err(e) = engine.autosave_scratch() {
+                tracing::warn!("automatic save of scratch tables failed: {e}");
+            }
+        }
+    });
+}
+
 fn main() {
     let _log_guard = init_logs();
     tauri::Builder::default()
@@ -76,6 +93,7 @@ fn main() {
             });
             let engine = Arc::new(Engine::new(EngineConfig::default(), sink)?);
             watcher::start(engine.clone(), trigger);
+            start_scratch_tasks(engine.clone());
             app.manage(AppState { engine });
             Ok(())
         })
@@ -100,7 +118,9 @@ fn main() {
             commands::save_table_as,
             commands::export_table,
             commands::export_result,
-            commands::save_result_as_source,
+            commands::save_result_as_scratch,
+            commands::autosave_scratch,
+            commands::flush_scratch,
             commands::run_sql,
             commands::fetch_result,
             commands::interrupt,
@@ -118,6 +138,8 @@ fn main() {
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
                 if let Some(state) = app.try_state::<AppState>() {
+                    // The UI has already saved the scratch tables. This is a second chance.
+                    let _ = state.engine.flush_scratch();
                     state.engine.shutdown();
                 }
             }

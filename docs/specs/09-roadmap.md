@@ -1,7 +1,7 @@
 # 09. Roadmap and implementation plan
 
 - Status: Draft
-- Last updated: 2026-10-11
+- Last updated: 2026-11-02
 
 ## 1. Milestones
 
@@ -20,6 +20,9 @@ M0 Foundation ──▶ M1 Viewer ──▶ M2 Edit and save ──▶ M3 SQL �
 | M4 | Excel read | Sheets in the tree, read sheets, save as (new XLSX or CSV) |
 | M5 | MCP | `armarium-mcp` (stdio) gives the tools in [08. MCP server](08-mcp-server.md). |
 | M6 | Extensions | Overwrite Excel files, GUI-attached MCP mode, automatic backup, Parquet support, and others |
+| M7 | Scratch sources | "Save as new source" is replaced by "Save as scratch". The user can save a SELECT result in one click, find it in the "Scratch" group, edit it, export it, and move it to a normal file with "Save as". |
+
+M7 depends on M3 (results and export) and M2 (save). It does not depend on M5 or M6, and the order of M6 and M7 is free.
 
 ## 2. Tasks
 
@@ -97,6 +100,23 @@ M0 Foundation ──▶ M1 Viewer ──▶ M2 Edit and save ──▶ M3 SQL �
 | M5-4 | Integration tests with MCP Inspector and Claude Desktop. | M5-2 |
 | M5-5 | Include `armarium-mcp.exe` in the installer. | M5-1 |
 
+### M7 Scratch sources
+
+For the behavior, see [04. Workspace](04-workspace.md), section 6.
+
+| ID | Task | Depends on |
+|---|---|---|
+| M7-1 | `workspace`: Add `workspaceId`, `nextScratchNumber`, and `scratch` to the schema (all optional, version stays 1). Keep unknown fields. Take the next number under the workspace lock. Provide the path of the scratch directory (`%LOCALAPPDATA%\Armarium\scratch\<workspaceId>\`). | M1-2 |
+| M7-2 | `engine`: Replace `save_result_as_source` with `save_result_as_scratch`: take a number, write the result to a temporary file and replace it, register the source with `scratch: true`, delete the temporary file on cancel or error. Reuse the CSV export of M3-7. | M7-1, M3-7 |
+| M7-3 | `engine`: Automatic save of scratch tables (2 seconds after the last change, on tab close, on exit). On failure, treat the table as dirty. Stop the automatic save after `EXTERNAL_MODIFICATION`. | M7-2, M2-4 |
+| M7-4 | `engine`: "Save as" for a scratch source. Reuse `save_table_as` (CSV and TSV only), then clear `scratch` and delete the old file. Ignore a delete error. | M7-2 |
+| M7-5 | `workspace`: Unregistration of a scratch source deletes its file (also for the MCP `unregister_source`). Disable "Change file location" for it. | M7-1 |
+| M7-6 | Cleanup at GUI start: delete unregistered `scratch_NN.csv` files and unfinished temporary files in the scratch directory. | M7-1 |
+| M7-7 | Tauri commands and `ui/src/api.ts`: add the scratch command, remove `save_result_as_source` and its UI code. | M7-2 |
+| M7-8 | UI: "Save as scratch" button and message with "Open". "Scratch" group in the tree. Context menu: Save as…, Export…, Delete scratch. Delete dialog. No `●` and no exit-dialog entry for scratch tables. Texts in English and Japanese (`ui/src/i18n.ts`). | M7-7, M7-3, M7-4 |
+| M7-9 | MCP: add `scratch` to the `list_sources` output. `unregister_source` follows M7-5. | M7-5, M5-2 |
+| M7-10 | Tests: number is never used again (delete, restart), cancel leaves no file, automatic save and its failure, "Save as" moves the data and keeps the SQL name, delete removes the file, cleanup, a query on `scratch_01` after the save. | M7-2 to M7-6 |
+
 ## 3. Distribution
 
 - Make an NSIS installer (per-user installation) and an MSI with the Tauri bundler.
@@ -126,6 +146,7 @@ M0 Foundation ──▶ M1 Viewer ──▶ M2 Edit and save ──▶ M3 SQL �
 | M4 | Done | Sheets in the tree, formula cells are read-only, "Save as" to XLSX or CSV. |
 | M5 | Done except M5-4 | All tools, resources, and the prompt. M5-4 (tests with MCP Inspector and Claude Desktop) is manual. The installer includes `armarium-mcp` as a sidecar (CI). |
 | M6 | Not started | |
+| M7 | Done | M7-1 to M7-10 are implemented and tested in `armarium-core` and `armarium-mcp`. The UI passes the type check. The maintainer checked the screens by hand (2026-11-02). |
 
 Known limits of the first implementation:
 

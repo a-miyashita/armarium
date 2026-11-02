@@ -2,4 +2,8 @@
 import type { SourceKind } from "./SourceKind";
 import type { TableInfo } from "./TableInfo";
 
-export type SourceInfo = { id: string, path: string, fileName: string, kind: SourceKind, exists: boolean, size: number | null, modifiedMs: number | null, tables: Array<TableInfo>, };
+export type SourceInfo = { id: string, path: string, fileName: string, kind: SourceKind, exists: boolean, 
+/**
+ * Armarium owns the file (a scratch source).
+ */
+scratch: boolean, size: number | null, modifiedMs: number | null, tables: Array<TableInfo>, };

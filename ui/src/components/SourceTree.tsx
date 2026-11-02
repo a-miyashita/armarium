@@ -9,6 +9,7 @@ import {
   relocateSource,
   reloadTable,
   renameTable,
+  saveTableAs,
   unregisterSource,
 } from "../actions";
 import { api } from "../api";
@@ -16,6 +17,7 @@ import type { SourceInfo } from "../bindings/SourceInfo";
 import type { TableInfo } from "../bindings/TableInfo";
 import { showError, useStore } from "../store";
 import { showMenu, type MenuItem } from "./ContextMenu";
+import { ExportDialog } from "./ExportDialog";
 import { ReadSettingsDialog } from "./ReadSettingsDialog";
 
 function formatSize(n: number | null): string {
@@ -26,9 +28,10 @@ function formatSize(n: number | null): string {
 }
 
 function statusIcon(src: SourceInfo, t: TableInfo): string {
-  if (!src.exists || t.load.state === "error") return "⚠";
+  if (!src.exists || t.load.state === "error" || t.autoSaveFailed) return "⚠";
   if (t.externallyModified) return "↻";
-  if (t.load.state === "loaded" && t.load.dirty) return "●";
+  // Armarium saves a scratch table by itself, so it never shows "●" (unless that fails, see above).
+  if (!src.scratch && t.load.state === "loaded" && t.load.dirty) return "●";
   return "";
 }
 
@@ -52,6 +55,7 @@ export function SourceTree() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [focused, setFocused] = useState<string | null>(null);
   const [settingsFor, setSettingsFor] = useState<number | null>(null);
+  const [exportFor, setExportFor] = useState<{ id: number; name: string } | null>(null);
 
   const rows = useMemo(() => {
     const out: Row[] = [];
@@ -64,7 +68,7 @@ export function SourceTree() {
         if (s.kind === "csv") {
           const tb = s.tables[0];
           if (!tb) continue;
-          out.push({ key: `t${tb.id}`, depth: 1, label: s.fileName, icon: "📄", status: statusIcon(s, tb), source: s, table: tb });
+          out.push({ key: `t${tb.id}`, depth: 1, label: s.fileName, icon: s.scratch ? "📝" : "📄", status: statusIcon(s, tb), source: s, table: tb });
         } else {
           const k = `s${s.id}`;
           const sopen = !collapsed[k];
@@ -86,8 +90,9 @@ export function SourceTree() {
         }
       }
     };
-    group("g-csv", t("tree.csv"), sources.filter((s) => s.kind === "csv"));
+    group("g-csv", t("tree.csv"), sources.filter((s) => s.kind === "csv" && !s.scratch));
     group("g-excel", t("tree.excel"), sources.filter((s) => s.kind === "excel"));
+    group("g-scratch", t("tree.scratch"), sources.filter((s) => s.scratch));
     return out;
   }, [sources, collapsed, t]);
 
@@ -112,7 +117,16 @@ export function SourceTree() {
         { separator: true },
       );
     }
-    if (!r.expandable || r.depth === 1) {
+    if (tb && r.source.scratch) {
+      // A scratch source: Armarium owns the file (04. Workspace, section 6).
+      items.push(
+        { label: t("tree.saveAs"), action: () => void saveTableAs(tb.id) },
+        { label: t("tree.export"), action: () => setExportFor({ id: tb.id, name: tb.sqlName }) },
+        { label: t("tree.showInExplorer"), action: () => void api.showInExplorer(r.source.path).catch(showError) },
+        { separator: true },
+        { label: t("tree.deleteScratch"), action: () => void unregisterSource(r.source.id) },
+      );
+    } else if (!r.expandable || r.depth === 1) {
       items.push(
         { label: t("tree.showInExplorer"), action: () => void api.showInExplorer(r.source.path).catch(showError) },
         { label: t("tree.relocate"), action: () => void relocateSource(r.source.id) },
@@ -214,6 +228,7 @@ export function SourceTree() {
         );
       })}
       {settingsFor != null && <ReadSettingsDialog tableId={settingsFor} onClose={() => setSettingsFor(null)} />}
+      {exportFor && <ExportDialog target={{ table: exportFor.id }} defaultName={exportFor.name} onClose={() => setExportFor(null)} />}
     </div>
   );
 }

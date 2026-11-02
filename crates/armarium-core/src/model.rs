@@ -232,6 +232,10 @@ pub struct TableInfo {
     /// Another program changed the file after Armarium read it.
     pub externally_modified: bool,
     pub read_only: bool,
+    /// The table belongs to a scratch source.
+    pub scratch: bool,
+    /// The automatic save of a scratch table failed. The table is dirty until the user saves it.
+    pub auto_save_failed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -243,11 +247,23 @@ pub struct SourceInfo {
     pub file_name: String,
     pub kind: SourceKind,
     pub exists: bool,
+    /// Armarium owns the file (a scratch source).
+    pub scratch: bool,
     #[ts(type = "number | null")]
     pub size: Option<u64>,
     #[ts(type = "number | null")]
     pub modified_ms: Option<i64>,
     pub tables: Vec<TableInfo>,
+}
+
+/// The result of "Save as scratch".
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ScratchInfo {
+    pub source_id: SourceId,
+    pub table_id: TableId,
+    pub sql_name: String,
 }
 
 /// The schema and the size of a loaded table.
@@ -262,6 +278,8 @@ pub struct TableMeta {
     pub row_count: u64,
     pub dirty: bool,
     pub read_only: bool,
+    /// The table belongs to a scratch source (Armarium saves it by itself).
+    pub scratch: bool,
     /// Why the original file cannot be overwritten (for example, an Excel workbook in M4).
     pub save_as_only: bool,
     pub dialect: Option<Dialect>,

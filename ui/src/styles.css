@@ -570,6 +570,10 @@ input {
   z-index: 800;
 }
 
+.message-action {
+  margin-left: 12px;
+}
+
 .message.error {
   border-color: var(--error);
   color: var(--error);

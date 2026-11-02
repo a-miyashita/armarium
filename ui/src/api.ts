@@ -9,6 +9,7 @@ import type { ErrorPayload } from "./bindings/ErrorPayload";
 import type { ExportFormat } from "./bindings/ExportFormat";
 import type { ReadOptions } from "./bindings/ReadOptions";
 import type { RowPage } from "./bindings/RowPage";
+import type { ScratchInfo } from "./bindings/ScratchInfo";
 import type { SourceInfo } from "./bindings/SourceInfo";
 import type { SqlRun } from "./bindings/SqlRun";
 import type { TableDiff } from "./bindings/TableDiff";
@@ -63,8 +64,9 @@ export const api = {
     call<void>("export_table", { tableId, path, format }),
   exportResult: (resultId: number, path: string, format: ExportFormat) =>
     call<void>("export_result", { resultId, path, format }),
-  saveResultAsSource: (resultId: number, path: string, format: ExportFormat) =>
-    call<string>("save_result_as_source", { resultId, path, format }),
+  saveResultAsScratch: (resultId: number) => call<ScratchInfo>("save_result_as_scratch", { resultId }),
+  /** Saves all dirty scratch tables now. Returns the tables that could not be saved. */
+  flushScratch: () => call<number[]>("flush_scratch"),
   runSql: (text: string, allowNoUndo = false) => call<SqlRun>("run_sql", { text, allowNoUndo }),
   fetchResult: (resultId: number, offset: number, limit: number) =>
     call<RowPage>("fetch_result", { resultId, offset, limit }),

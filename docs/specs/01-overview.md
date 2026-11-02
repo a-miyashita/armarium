@@ -1,7 +1,7 @@
 # 01. Overview
 
 - Status: Draft
-- Last updated: 2026-10-11
+- Last updated: 2026-11-02
 
 ## 1. Purpose
 
@@ -33,7 +33,7 @@ We make a desktop application. The user registers many tabular files (CSV, TSV, 
 - Edit cells; add and delete rows; add, delete, and rename columns
 - Undo and redo
 - Aggregate and transform data with standard SQL (SELECT and the DML statements INSERT, UPDATE, and DELETE)
-- Export query results, and save query results as a new source
+- Export query results, and save query results as scratch sources (files that Armarium names and keeps for the user)
 - MCP server (stdio)
 
 ### 3.2 Out of scope (at least for the first release)
@@ -50,6 +50,7 @@ We make a desktop application. The user registers many tabular files (CSV, TSV, 
 |---|---|
 | Workspace | The set of registered sources and their settings. The application has one workspace. |
 | Source | One registered file: a CSV file, a TSV file, or an Excel workbook. |
+| Scratch source | A source that holds the saved result of a SELECT statement. Armarium names the file (`scratch_01`) and keeps it in its own folder. The user can later move it to a normal file with "Save as". |
 | Table | The unit that the user shows, edits, and queries with SQL. A CSV or TSV source has one table. In an Excel workbook, each sheet is one table. |
 | Working copy | The data that Armarium reads from a file and keeps in SQLite for editing. The file does not change until the user saves. |
 | Dirty | A working copy is dirty when it has changes that are not saved. |

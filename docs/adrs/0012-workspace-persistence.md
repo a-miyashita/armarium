@@ -37,3 +37,15 @@ Both the GUI and the MCP server (a different process) read and write this inform
 
 - Armarium uses `std::fs::File::lock` (Rust 1.89 and later) for `workspace.json.lock` instead of the
   `fs4` crate. The behavior is the same, and there is one dependency less.
+
+### 2026-11-02: Fields for scratch sources
+
+- Scratch sources ([04. Workspace](../specs/04-workspace.md), section 6) add three optional fields:
+  `workspaceId` (a random UUID), `nextScratchNumber` (an integer counter), and `scratch` (a boolean on
+  a source).
+- The schema `version` stays 1, because the fields are optional and Armarium keeps unknown fields.
+- Merge rule: when two processes write at the same time, `nextScratchNumber` takes the larger value,
+  so a scratch number is never used again. `workspaceId` is written once, and the first writer wins.
+- Armarium stores the scratch files in `%LOCALAPPDATA%\Armarium\scratch\<workspaceId>\`, not in
+  `%APPDATA%`. The files are large and are not worth copying with a roaming profile. A consequence:
+  after the profile roams to another PC, scratch sources show `⚠` there.

@@ -1,7 +1,7 @@
 # 08. MCP server
 
 - Status: Draft
-- Last updated: 2026-10-11
+- Last updated: 2026-11-02
 
 ## 1. Overview
 
@@ -46,7 +46,7 @@ For details, see [ADR-0013](../adrs/0013-mcp-server-mode.md).
 
 | Tool | Description | Writes |
 |---|---|---|
-| `list_sources` | List the registered sources and tables (SQL name, path, type, load state) | - |
+| `list_sources` | List the registered sources and tables (SQL name, path, type, load state, and `scratch` for a scratch source) | - |
 | `describe_table` | Column names, logical types, number of rows, and a sample of the first 5 rows | - |
 | `read_rows` | Get rows of a table with `offset` and `limit` | - |
 | `query` | Run a query (SELECT) and return the result | - |
@@ -55,7 +55,7 @@ For details, see [ADR-0013](../adrs/0013-mcp-server-mode.md).
 | `save_table` | Save the working copy to the file | ✔ |
 | `discard_changes` | Discard the working copy and read the file again | ✔ |
 | `register_source` | Register a file (only in the `--allow-dir` directories) | ✔ |
-| `unregister_source` | Unregister a source (the file is not deleted). Input: `source` (the SQL name of a table of the source, or the source ID). | ✔ |
+| `unregister_source` | Unregister a source. The file is not deleted, except for a scratch source: its file is deleted. Input: `source` (the SQL name of a table of the source, or the source ID). | ✔ |
 | `export_result` | Run a SELECT statement and write all rows to CSV, TSV, or XLSX (only in the `--allow-dir` directories). Input: `sql`, `path`. | ✔ |
 
 ### 3.1 Example input and output
@@ -81,6 +81,7 @@ For details, see [ADR-0013](../adrs/0013-mcp-server-mode.md).
 - Read tools: `readOnlyHint: true`
 - `execute`, `discard_changes`: `destructiveHint: false` (the file does not change), `idempotentHint: false`
 - `save_table`: `destructiveHint: true` (the file is overwritten)
+- `unregister_source`: `destructiveHint: true` (the file of a scratch source is deleted)
 
 ## 4. Resources and prompts
 
@@ -94,6 +95,9 @@ For details, see [ADR-0013](../adrs/0013-mcp-server-mode.md).
 
 - The SQL sandbox is the same as in the GUI ([ADR-0009](../adrs/0009-sql-sandbox.md)).
 - Only two tools write files: `save_table` (overwrites a registered file) and `export_result` (in the `--allow-dir` directories).
+- One tool deletes a file: `unregister_source`, and only for a scratch source. A scratch file is in a directory that Armarium owns ([04. Workspace](04-workspace.md), section 6), so this is outside `--allow-dir` by design.
+- The MCP server has no tool that creates a scratch source. An agent that needs the whole result as a file uses `export_result`. (We can add a tool later if there is a need.)
+- The MCP server does not run the cleanup of the scratch directory. Only the GUI does.
 - If `save_table` detects an external change, it fails. (There is no overwrite confirmation as in the GUI.) The agent must call `discard_changes` and try again.
 - If the GUI has the same file open and dirty: the GUI detects the save as an external change and shows a warning when the user saves.
   (In standalone mode, the MCP server cannot know the dirty state of the GUI. The GUI-attached mode will solve this.)

@@ -1,7 +1,7 @@
 # 07. SQL
 
 - Status: Draft
-- Last updated: 2026-10-11
+- Last updated: 2026-11-02
 
 ## 1. Overview
 
@@ -60,7 +60,10 @@ For details, see [ADR-0010](../adrs/0010-sql-naming.md).
   - Armarium knows the total number of rows immediately, and does not run the query again when the user scrolls.
 - Armarium sets the logical type of each result column from the value types (`typeof`). If the result contains an original column as it is, the result column gets the logical type of the original column.
 - When the user closes the query tab, Armarium drops the result table.
-- Operations on a result: export to CSV or XLSX, save as a new source (write a file and register it in the workspace), copy to the clipboard.
+- Operations on a result: export to CSV or XLSX, save as scratch, copy to the clipboard.
+  - Export writes a file that the user names. Nothing is registered.
+  - "Save as scratch" writes the whole result to a CSV file in the scratch directory of the workspace, with an automatic name (`scratch_01`, `scratch_02`, …), and registers it as a source in the "Scratch" group. The user does not choose a file name. The SQL name is the file name, so the next query can use `SELECT … FROM scratch_01`. For details, see [04. Workspace](04-workspace.md), section 6.
+  - This is the replacement for `CREATE TABLE AS` and temporary views, which the sandbox refuses ([ADR-0009](../adrs/0009-sql-sandbox.md)).
 
 ### 4.2 DML
 

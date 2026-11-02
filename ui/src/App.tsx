@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { addFiles, redo, refreshMeta, refreshSources, saveAll, saveTable, saveTableAs, setView, undo } from "./actions";
+import { addFiles, closeTableTab, redo, refreshMeta, refreshSources, saveAll, saveTable, saveTableAs, setView, undo } from "./actions";
 import { api } from "./api";
 import type { CoreEvent } from "./bindings/CoreEvent";
 import { ContextMenu } from "./components/ContextMenu";
@@ -14,7 +14,7 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { SourceTree } from "./components/SourceTree";
 import { SqlPanel } from "./components/SqlPanel";
 import { TableGrid } from "./components/TableGrid";
-import { ask, findTable, useStore } from "./store";
+import { ask, findTable, needsSave, useStore } from "./store";
 
 function Toolbar({ onSettings, onExport }: { onSettings: () => void; onExport: () => void }) {
   const { t } = useTranslation();
@@ -95,7 +95,7 @@ function TabBar() {
       {tabs.map((tab) => {
         const found = findTable(sources, tab.tableId);
         const label = found ? (found.table.sheet ? `${found.source.fileName} / ${found.table.sheet}` : found.source.fileName) : "?";
-        const dirty = metas[tab.tableId]?.dirty;
+        const dirty = needsSave(sources, metas[tab.tableId]);
         return (
           <div
             key={tab.tableId}
@@ -103,7 +103,7 @@ function TabBar() {
             aria-selected={tab.tableId === active}
             className={`tab ${tab.tableId === active ? "active" : ""}`}
             onClick={() => useStore.setState({ activeTable: tab.tableId })}
-            onAuxClick={(e) => e.button === 1 && useStore.getState().closeTab(tab.tableId)}
+            onAuxClick={(e) => e.button === 1 && void closeTableTab(tab.tableId)}
             title={found?.source.path}
           >
             <span>{label}</span>
@@ -113,7 +113,7 @@ function TabBar() {
               aria-label="close"
               onClick={(e) => {
                 e.stopPropagation();
-                useStore.getState().closeTab(tab.tableId);
+                void closeTableTab(tab.tableId);
               }}
             >
               ×
@@ -184,13 +184,28 @@ function Message() {
   const message = useStore((s) => s.message);
   useEffect(() => {
     if (!message) return;
-    const h = setTimeout(() => useStore.setState({ message: null }), message.kind === "error" ? 12000 : 4000);
+    const h = setTimeout(
+      () => useStore.setState({ message: null }),
+      message.kind === "error" ? 12000 : message.action ? 10000 : 4000,
+    );
     return () => clearTimeout(h);
   }, [message]);
   if (!message) return null;
   return (
     <div className={`message ${message.kind}`} role={message.kind === "error" ? "alert" : "status"} onClick={() => useStore.setState({ message: null })}>
       {message.text}
+      {message.action && (
+        <button
+          className="message-action"
+          onClick={(e) => {
+            e.stopPropagation();
+            useStore.setState({ message: null });
+            message.action!.run();
+          }}
+        >
+          {message.action.label}
+        </button>
+      )}
     </div>
   );
 }
@@ -245,6 +260,8 @@ export function App() {
   useEffect(() => {
     const win = getCurrentWindow();
     const un = win.onCloseRequested(async (event) => {
+      // Armarium saves the scratch tables first. A table that failed stays in the list.
+      await api.flushScratch().catch(() => []);
       const dirty = await api.dirtyTables().catch(() => []);
       if (!dirty.length) return;
       event.preventDefault();
