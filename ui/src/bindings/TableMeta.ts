@@ -7,6 +7,10 @@ import type { Dialect } from "./Dialect";
  */
 export type TableMeta = { id: number, sqlName: string, columns: Array<ColumnSchema>, rowCount: number, dirty: boolean, readOnly: boolean, 
 /**
+ * The table belongs to a scratch source (Armarium saves it by itself).
+ */
+scratch: boolean, 
+/**
  * Why the original file cannot be overwritten (for example, an Excel workbook in M4).
  */
 saveAsOnly: boolean, dialect: Dialect | null, warnings: Array<string>, version: number, canUndo: boolean, canRedo: boolean, };

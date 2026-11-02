@@ -6,7 +6,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { runSql, saveResultAsSource } from "../actions";
+import { runSql, saveResultAsScratch } from "../actions";
 import { api } from "../api";
 import type { StatementResult } from "../bindings/StatementResult";
 import { useStore } from "../store";
@@ -151,7 +151,7 @@ export function SqlPanel() {
             <>
               <div className="result-actions">
                 <button onClick={() => setExporting(active.resultId!)}>{t("toolbar.export")}…</button>
-                <button onClick={() => void saveResultAsSource(active.resultId!)}>{t("sql.saveAsSource")}</button>
+                <button onClick={() => void saveResultAsScratch(active.resultId!)}>{t("sql.saveAsScratch")}</button>
               </div>
               <ResultGrid result={active} />
             </>

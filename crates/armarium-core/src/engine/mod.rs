@@ -7,6 +7,7 @@
 
 mod edit;
 mod persist;
+mod scratch;
 mod views;
 
 pub use persist::write_csv_rows;
@@ -55,6 +56,10 @@ pub struct EngineConfig {
     pub undo_max_ops: usize,
     /// The maximum total size of the undo entries for each table, in bytes.
     pub undo_max_bytes: u64,
+    /// The root of the scratch directories (`%LOCALAPPDATA%\\Armarium\\scratch`).
+    pub scratch_root: PathBuf,
+    /// The time without changes before Armarium saves a scratch table.
+    pub scratch_idle: Duration,
 }
 
 impl Default for EngineConfig {
@@ -65,6 +70,8 @@ impl Default for EngineConfig {
             db: DbSettings::default(),
             undo_max_ops: 1000,
             undo_max_bytes: 256 * 1024 * 1024,
+            scratch_root: fsutil::local_data_dir().join("scratch"),
+            scratch_idle: Duration::from_secs(2),
         }
     }
 }
@@ -160,6 +167,10 @@ pub(crate) struct Inner {
     pub cancel: Arc<AtomicBool>,
     pub fetch: Arc<Mutex<HashMap<TableId, FetchMeta>>>,
     pub views: Arc<Mutex<HashMap<ViewId, ViewMeta>>>,
+    /// Scratch tables: the last state that Armarium saw, and when.
+    pub scratch_seen: HashMap<TableId, (u64, Instant)>,
+    /// Scratch tables whose automatic save failed, with the state at the failure.
+    pub scratch_failed: HashMap<TableId, u64>,
 }
 
 pub struct Engine {
@@ -211,6 +222,8 @@ impl Engine {
             cancel: cancel.clone(),
             fetch: fetch.clone(),
             views: views.clone(),
+            scratch_seen: HashMap::new(),
+            scratch_failed: HashMap::new(),
         };
         inner.sync_tables();
         Ok(Engine {
@@ -352,6 +365,15 @@ impl Engine {
                 .tables
                 .values()
                 .filter(|t| t.data.as_ref().map(|d| d.dirty()).unwrap_or(false))
+                // Armarium saves scratch tables by itself, unless that fails.
+                .filter(|t| {
+                    i.scratch_failed.contains_key(&t.id)
+                        || !i
+                            .ws
+                            .source(&t.source_id)
+                            .map(|s| s.scratch)
+                            .unwrap_or(false)
+                })
                 .map(|t| t.id)
                 .collect();
             ids.into_iter().map(|id| i.table_info(id)).collect()
@@ -506,25 +528,28 @@ impl Engine {
         self.run(|i| i.export_result(result, path, &format))
     }
 
-    /// Writes a query result to a file and registers the file.
-    pub fn save_result_as_source(
-        &self,
-        result: ViewId,
-        path: &Path,
-        format: ExportFormat,
-    ) -> Result<SourceId> {
+    /// Saves a query result as a new scratch source (04. Workspace, section 6.3).
+    pub fn save_result_as_scratch(&self, result: ViewId) -> Result<ScratchInfo> {
+        self.run(|i| i.save_result_as_scratch(result))
+    }
+
+    /// Saves the scratch tables that have had no change for `scratch_idle`.
+    /// Returns the tables that Armarium saved.
+    pub fn autosave_scratch(&self) -> Result<Vec<TableId>> {
+        self.run(|i| Ok(i.autosave_scratch(false)))
+    }
+
+    /// Saves all dirty scratch tables now (before exit). Returns the tables that failed.
+    pub fn flush_scratch(&self) -> Result<Vec<TableId>> {
         self.run(|i| {
-            i.export_result(result, path, &format)?;
-            let r = i.add_sources(&[path.to_path_buf()])?;
-            match r.into_iter().next() {
-                Some(AddSourceResult {
-                    source_id: Some(id),
-                    ..
-                }) => Ok(id),
-                Some(AddSourceResult { error: Some(e), .. }) => Err(CoreError::Internal(e.message)),
-                _ => Err(CoreError::Internal("cannot register the file".into())),
-            }
+            i.autosave_scratch(true);
+            Ok(i.scratch_failed.keys().copied().collect())
         })
+    }
+
+    /// Deletes the scratch files that are not registered (04. Workspace, section 6.7).
+    pub fn cleanup_scratch(&self) -> Result<usize> {
+        self.run(|i| Ok(i.cleanup_scratch()))
     }
 
     pub fn diff_table(&self, table: TableId, sample: usize) -> Result<TableDiff> {
@@ -720,6 +745,7 @@ impl Inner {
                     file_name: s.file_name(),
                     kind: s.kind,
                     exists: meta.is_some(),
+                    scratch: s.scratch,
                     size: meta.as_ref().map(|m| m.len()),
                     modified_ms: meta
                         .as_ref()
@@ -752,6 +778,8 @@ impl Inner {
             load,
             externally_modified: t.externally_modified,
             read_only: src.kind == SourceKind::Excel || src.is_read_only_format(),
+            scratch: src.scratch,
+            auto_save_failed: self.scratch_failed.contains_key(&id),
         })
     }
 
@@ -765,6 +793,11 @@ impl Inner {
             row_count: d.row_count,
             dirty: d.dirty(),
             read_only: false,
+            scratch: self
+                .ws
+                .source(&t.source_id)
+                .map(|s| s.scratch)
+                .unwrap_or(false),
             save_as_only: d.save_as_only,
             dialect: d.dialect.clone(),
             warnings: d.warnings.clone(),
@@ -817,9 +850,13 @@ impl Inner {
     }
 
     pub fn remove_source(&mut self, id: &str) -> Result<()> {
-        self.ws.remove_source(id)?;
+        let removed = self.ws.remove_source(id)?;
         self.ws.save()?;
         self.sync_tables();
+        // Armarium owns the file of a scratch source, so it deletes the file.
+        if removed.scratch {
+            self.delete_scratch_file(&removed.path_buf());
+        }
         self.emit(CoreEvent::WorkspaceChanged);
         Ok(())
     }
@@ -837,6 +874,11 @@ impl Inner {
     }
 
     pub fn relocate_source(&mut self, id: &str, path: &Path) -> Result<()> {
+        if self.ws.source(id)?.scratch {
+            return Err(CoreError::InvalidArgument(
+                "the file of a scratch source cannot be changed. Use \"Save as\" instead.".into(),
+            ));
+        }
         if !path.is_file() {
             return Err(CoreError::FileNotFound(path.display().to_string()));
         }

@@ -409,11 +409,24 @@ impl Inner {
             };
             quote_all = qa;
         }
+        let old = self.ws.source(&sid)?.clone();
         self.write_table_csv(table, &abs, &dialect, dialect.has_header, quote_all)?;
         self.ws.relocate(&sid, &abs)?;
+        // "Save as" turns a scratch source into a normal source (04. Workspace, section 6.5).
+        let was_scratch = old.scratch;
+        if was_scratch {
+            self.ws.set_scratch(&sid, false)?;
+        }
         self.ws.save()?;
         self.data_mut(table)?.dialect = Some(dialect);
         self.mark_saved(table, &abs)?;
+        if was_scratch {
+            self.scratch_seen.remove(&table);
+            self.scratch_failed.remove(&table);
+            if !crate::fsutil::same_path(&old.path, &abs.to_string_lossy()) {
+                self.delete_scratch_file(&old.path_buf());
+            }
+        }
         self.meta(table)
     }
 

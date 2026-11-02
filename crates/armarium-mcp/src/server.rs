@@ -294,9 +294,10 @@ impl Armarium {
                             }
                         };
                         md.push_str(&format!(
-                            "| {} | {} | {} | {} |\n",
+                            "| {} | {}{} | {} | {} |\n",
                             t.sql_name,
                             s.path,
+                            if s.scratch { " (scratch)" } else { "" },
                             t.sheet.clone().unwrap_or_default(),
                             state
                         ));
@@ -688,10 +689,11 @@ impl Armarium {
         })
     }
 
-    /// Unregister a source. The file is not deleted.
+    /// Unregister a source. The file is not deleted, except for a scratch source: Armarium owns
+    /// its file and deletes it.
     #[tool(annotations(
         read_only_hint = false,
-        destructive_hint = false,
+        destructive_hint = true,
         idempotent_hint = true
     ))]
     async fn unregister_source(
@@ -704,15 +706,20 @@ impl Armarium {
                     Ok(id) => e.table_info(id)?.source_id,
                     Err(_) => args.source.clone(),
                 };
+                let scratch = e.list_sources()?.iter().any(|s| s.id == sid && s.scratch);
                 e.remove_source(&sid)?;
-                Ok(sid)
+                Ok((sid, scratch))
             })
             .await;
         Ok(match r {
             Err(e) => core_error(e),
-            Ok(sid) => ok(
-                json!({ "source_id": sid }),
-                "Unregistered the source. The file was not deleted.".into(),
+            Ok((sid, scratch)) => ok(
+                json!({ "source_id": sid, "file_deleted": scratch }),
+                if scratch {
+                    "Unregistered the scratch source and deleted its file.".into()
+                } else {
+                    "Unregistered the source. The file was not deleted.".into()
+                },
             ),
         })
     }

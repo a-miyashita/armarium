@@ -16,6 +16,12 @@ pub const WORKSPACE_VERSION: u32 = 1;
 pub struct WorkspaceFile {
     #[serde(default = "default_version")]
     pub version: u32,
+    /// The ID of this workspace. It names the scratch directory (04. Workspace, section 6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    /// The next number for a scratch file. It only grows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_scratch_number: Option<u64>,
     #[serde(default)]
     pub sources: Vec<SourceEntry>,
     /// Unknown fields. Armarium keeps them when it writes the file.
@@ -27,6 +33,8 @@ impl Default for WorkspaceFile {
     fn default() -> Self {
         WorkspaceFile {
             version: WORKSPACE_VERSION,
+            workspace_id: None,
+            next_scratch_number: None,
             sources: Vec::new(),
             extra: Map::new(),
         }
@@ -56,6 +64,9 @@ pub struct SourceEntry {
     pub sql_name: Option<String>,
     #[serde(default)]
     pub added_at: String,
+    /// True for a scratch source: Armarium owns the file (04. Workspace, section 6).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub scratch: bool,
     /// Read settings. Armarium keeps the raw JSON so that unknown fields stay.
     #[serde(default = "empty_object")]
     pub options: Value,
@@ -142,6 +153,19 @@ pub fn kind_for_path(path: &Path) -> Result<SourceKind> {
             format!(".{other}")
         })),
     }
+}
+
+/// The file name of a scratch file: `scratch_01.csv`, ..., `scratch_100.csv`.
+pub fn scratch_file_name(n: u64) -> String {
+    format!("scratch_{n:02}.csv")
+}
+
+/// True if a file name is the name of a scratch file (`scratch_NN.csv`).
+pub fn is_scratch_file_name(name: &str) -> bool {
+    name.strip_prefix("scratch_")
+        .and_then(|r| r.strip_suffix(".csv"))
+        .map(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
+        .unwrap_or(false)
 }
 
 pub fn extension(path: &Path) -> String {
@@ -265,6 +289,7 @@ impl Workspace {
             kind,
             sql_name: None,
             added_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            scratch: false,
             options: empty_object(),
             sheets: Vec::new(),
             extra: Map::new(),
@@ -433,6 +458,53 @@ impl Workspace {
         Ok(())
     }
 
+    /// Sets or clears the scratch flag of a source.
+    pub fn set_scratch(&mut self, id: &str, scratch: bool) -> Result<()> {
+        self.source_mut(id)?.scratch = scratch;
+        Ok(())
+    }
+
+    /// The scratch directory of this workspace, if it has one yet.
+    pub fn scratch_dir(&self, root: &Path) -> Option<PathBuf> {
+        self.file.workspace_id.as_ref().map(|id| root.join(id))
+    }
+
+    /// Takes the next scratch number and returns the path of the new scratch file.
+    ///
+    /// Armarium holds the workspace lock, reads the latest file, and writes the new counter before
+    /// it returns. Thus, a number is not used again (04. Workspace, section 6.2).
+    pub fn allocate_scratch(&mut self, root: &Path) -> Result<PathBuf> {
+        if let Some(dir) = self.path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let lock = self.lock()?;
+        let disk = self.read_disk()?.map(|(f, _)| f).unwrap_or_default();
+        let id = disk
+            .workspace_id
+            .clone()
+            .or_else(|| self.file.workspace_id.clone())
+            .unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
+        let dir = root.join(&id);
+        std::fs::create_dir_all(&dir).map_err(|e| CoreError::from_io(e, &dir))?;
+        let mut n = disk
+            .next_scratch_number
+            .unwrap_or(1)
+            .max(self.file.next_scratch_number.unwrap_or(1))
+            .max(1);
+        let path = loop {
+            let candidate = dir.join(scratch_file_name(n));
+            n += 1;
+            if !candidate.exists() {
+                break candidate;
+            }
+        };
+        self.file.workspace_id = Some(id);
+        self.file.next_scratch_number = Some(n);
+        self.save_locked()?;
+        drop(lock);
+        Ok(path)
+    }
+
     /// Updates the list of sheets of a workbook. Keeps the entries of sheets that still exist.
     /// Returns true if the list changed.
     pub fn sync_sheets(&mut self, id: &str, sheets: &[SheetListing]) -> Result<bool> {
@@ -548,6 +620,14 @@ impl Workspace {
         if let Some(dir) = self.path.parent() {
             std::fs::create_dir_all(dir)?;
         }
+        let lock = self.lock()?;
+        let result = self.save_locked();
+        drop(lock);
+        result
+    }
+
+    /// Takes the exclusive lock of `workspace.json`.
+    fn lock(&self) -> Result<std::fs::File> {
         let lock_path = PathBuf::from(format!("{}.lock", self.path.display()));
         let lock = std::fs::OpenOptions::new()
             .create(true)
@@ -556,12 +636,23 @@ impl Workspace {
             .open(&lock_path)
             .map_err(|e| CoreError::from_io(e, &lock_path))?;
         lock.lock().map_err(|e| CoreError::from_io(e, &lock_path))?;
+        Ok(lock)
+    }
 
+    /// `save`, for a caller that already holds the lock.
+    fn save_locked(&mut self) -> Result<()> {
         let mut merged = match self.read_disk()? {
             Some((disk, _)) => disk,
             None => WorkspaceFile::default(),
         };
         merged.version = WORKSPACE_VERSION;
+        // The first writer wins for the ID. The counter takes the larger value.
+        if merged.workspace_id.is_none() {
+            merged.workspace_id = self.file.workspace_id.clone();
+        }
+        merged.next_scratch_number = merged
+            .next_scratch_number
+            .max(self.file.next_scratch_number);
         merged.sources.retain(|s| !self.removed.contains(&s.id));
         for ours in self
             .file
@@ -587,7 +678,6 @@ impl Workspace {
         self.file = merged;
         self.changed.clear();
         self.removed.clear();
-        drop(lock);
         Ok(())
     }
 }

@@ -8,4 +8,12 @@ export type TableInfo = { id: number, sourceId: string, sheet: string | null, sq
 /**
  * Another program changed the file after Armarium read it.
  */
-externallyModified: boolean, readOnly: boolean, };
+externallyModified: boolean, readOnly: boolean, 
+/**
+ * The table belongs to a scratch source.
+ */
+scratch: boolean, 
+/**
+ * The automatic save of a scratch table failed. The table is dirty until the user saves it.
+ */
+autoSaveFailed: boolean, };

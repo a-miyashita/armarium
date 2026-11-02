@@ -58,7 +58,7 @@ export interface State {
   /** Incremented when a table changes, so that the grid fetches again. */
   versions: Record<number, number>;
   dialogs: DialogRequest[];
-  message: { kind: "error" | "info"; text: string } | null;
+  message: { kind: "error" | "info"; text: string; action?: { label: string; run: () => void } } | null;
   progress: { task: string; done: number; total: number | null } | null;
   modal: string | null;
 
@@ -146,8 +146,18 @@ export function showError(e: unknown) {
   useStore.setState({ message: { kind: "error", text } });
 }
 
-export function showInfo(text: string) {
-  useStore.setState({ message: { kind: "info", text } });
+export function showInfo(text: string, action?: { label: string; run: () => void }) {
+  useStore.setState({ message: { kind: "info", text, action } });
+}
+
+/**
+ * True if the user must save the table. Armarium saves a scratch table by itself,
+ * so it counts as unsaved only if the automatic save failed (04. Workspace, section 6.4).
+ */
+export function needsSave(sources: SourceInfo[], meta: TableMeta | undefined): boolean {
+  if (!meta?.dirty) return false;
+  if (!meta.scratch) return true;
+  return findTable(sources, meta.id)?.table.autoSaveFailed ?? false;
 }
 
 /** Finds a table and its source in the source list. */

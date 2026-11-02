@@ -208,16 +208,23 @@ pub async fn export_result(
 }
 
 #[tauri::command]
-pub async fn save_result_as_source(
+pub async fn save_result_as_scratch(
     state: State<'_, AppState>,
     result_id: ViewId,
-    path: String,
-    format: ExportFormat,
-) -> CmdResult<String> {
-    blocking(&state, move |e| {
-        e.save_result_as_source(result_id, &PathBuf::from(path), format)
-    })
-    .await
+) -> CmdResult<ScratchInfo> {
+    blocking(&state, move |e| e.save_result_as_scratch(result_id)).await
+}
+
+/// Saves scratch tables that had no change for a while (a timer in the app calls this too).
+#[tauri::command]
+pub async fn autosave_scratch(state: State<'_, AppState>) -> CmdResult<Vec<TableId>> {
+    blocking(&state, |e| e.autosave_scratch()).await
+}
+
+/// Saves all dirty scratch tables now. Returns the tables that could not be saved.
+#[tauri::command]
+pub async fn flush_scratch(state: State<'_, AppState>) -> CmdResult<Vec<TableId>> {
+    blocking(&state, |e| e.flush_scratch()).await
 }
 
 #[tauri::command]

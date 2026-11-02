@@ -1,7 +1,7 @@
 # 06. Editing
 
 - Status: Draft
-- Last updated: 2026-10-11
+- Last updated: 2026-11-02
 
 ## 1. Edit model
 
@@ -78,6 +78,14 @@ For details, see [ADR-0006](../adrs/0006-working-copy-edit-model.md).
 | Save as | Write to a different file, and connect the source to the new file. Only text formats (CSV, TSV, TXT) for a CSV or TSV source. For an Excel sheet, see 05. File formats, section 2.2. |
 | Export | Write to a different file. The source does not change. |
 
+"Save as" changes where the source is saved. "Export" does not change the source: it writes a copy.
+
+Scratch sources ([04. Workspace](04-workspace.md), section 6) differ in three ways:
+
+- Armarium saves them by itself (after 2 seconds without changes, when the tab closes, and on exit). The user does not need "Save". Ctrl+S saves at once.
+- "Save as" also moves the file out of the scratch directory and deletes the old file. The source stops being a scratch source.
+- They are not dirty in the UI, unless an automatic save fails. The exit dialog does not list them (section 6).
+
 ### 5.2 Detection of external changes
 
 - When Armarium reads a file, it records a fingerprint: the size, the date of the last change, and the xxHash3 of the first and last 64 KB.
@@ -92,5 +100,5 @@ For details, see [ADR-0006](../adrs/0006-working-copy-edit-model.md).
 
 ## 6. Exit
 
-- If there are dirty tables, Armarium shows a list of them and asks the user to confirm.
+- If there are dirty tables, Armarium shows a list of them and asks the user to confirm. Scratch sources are not in the list. Armarium saves them first. If this save fails, the table is dirty and is in the list.
 - Recovery after a crash is a possible later feature: if Armarium keeps the session database after an abnormal exit, it can possibly restore the changes that were not saved at the next start.

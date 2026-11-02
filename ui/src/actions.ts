@@ -1,4 +1,5 @@
 // User operations: they call the API, update the store, and show dialogs.
+import { documentDir, join } from "@tauri-apps/api/path";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { api, CoreError, formatForPath } from "./api";
 import type { EditOp } from "./bindings/EditOp";
@@ -237,17 +238,28 @@ export async function saveTableAs(tableId = activeTable()): Promise<boolean> {
   if (tableId == null) return false;
   const found = findTable(useStore.getState().sources, tableId);
   const isExcel = found?.source.kind === "excel";
+  const isScratch = !!found?.source.scratch;
   const base = found ? found.source.path.replace(/\.[^.\\/]+$/, "") : "table";
-  const defaultPath = isExcel ? `${base}_${found?.table.sheet ?? "sheet"}.xlsx` : found?.source.path;
+  let defaultPath = isExcel ? `${base}_${found?.table.sheet ?? "sheet"}.xlsx` : found?.source.path;
+  if (isScratch && found) {
+    // A scratch file is in a folder that Armarium owns. The dialog starts in the Documents folder.
+    try {
+      defaultPath = await join(await documentDir(), `${found.table.sqlName}.csv`);
+    } catch {
+      defaultPath = `${found.table.sqlName}.csv`;
+    }
+  }
   const path = await saveDialog({
     defaultPath,
     filters: isExcel
       ? [{ name: "Excel", extensions: ["xlsx"] }, { name: "CSV", extensions: ["csv"] }, { name: "TSV", extensions: ["tsv"] }]
-      : [{ name: "CSV", extensions: ["csv"] }, { name: "TSV", extensions: ["tsv"] }, { name: "Text", extensions: ["txt"] }],
+      : isScratch
+        ? [{ name: "CSV", extensions: ["csv"] }, { name: "TSV", extensions: ["tsv"] }]
+        : [{ name: "CSV", extensions: ["csv"] }, { name: "TSV", extensions: ["tsv"] }, { name: "Text", extensions: ["txt"] }],
   });
   if (!path) return false;
   try {
-    useStore.getState().setMeta(await api.saveTableAs(tableId, path, isExcel ? formatForPath(path) : null));
+    useStore.getState().setMeta(await api.saveTableAs(tableId, path, isExcel || isScratch ? formatForPath(path) : null));
     await refreshSources();
     return true;
   } catch (e) {
@@ -293,7 +305,19 @@ export async function reloadTable(tableId: number, confirm = true) {
 export async function unregisterSource(sourceId: string) {
   const src = useStore.getState().sources.find((s) => s.id === sourceId);
   if (!src) return;
-  const dirty = src.tables.some((t) => t.load.state === "loaded" && t.load.dirty);
+  if (src.scratch) {
+    // Armarium deletes the file of a scratch source (04. Workspace, section 6.6).
+    const r = await ask({
+      title: t("tree.deleteScratch"),
+      body: t("dialog.confirmDeleteScratch", { name: src.tables[0]?.sqlName ?? src.fileName }),
+      buttons: [
+        { id: "cancel", label: t("dialog.cancel") },
+        { id: "ok", label: t("dialog.delete"), primary: true },
+      ],
+    });
+    if (r.button !== "ok") return;
+  }
+  const dirty = !src.scratch && src.tables.some((t) => t.load.state === "loaded" && t.load.dirty);
   if (dirty) {
     const r = await ask({
       title: t("tree.unregister"),
@@ -426,17 +450,28 @@ export async function runSql(text: string) {
   }
 }
 
-export async function saveResultAsSource(resultId: number) {
-  const path = await saveDialog({
-    filters: [{ name: "CSV", extensions: ["csv"] }, { name: "Excel", extensions: ["xlsx"] }, { name: "TSV", extensions: ["tsv"] }],
-  });
-  if (!path) return;
+/** Saves the whole result as a new scratch source with one click (03. UI, section 4). */
+export async function saveResultAsScratch(resultId: number) {
   try {
-    await api.saveResultAsSource(resultId, path, formatForPath(path));
+    const info = await api.saveResultAsScratch(resultId);
     await refreshSources();
+    showInfo(t("sql.savedAsScratch", { name: info.sqlName }), {
+      label: t("sql.open"),
+      run: () => void openTable(info.tableId),
+    });
   } catch (e) {
     showError(e);
   }
+}
+
+/** Closes a tab. Armarium saves a scratch table first. */
+export async function closeTableTab(tableId: number) {
+  const found = findTable(useStore.getState().sources, tableId);
+  if (found?.source.scratch) {
+    await api.flushScratch().catch(() => []);
+    await refreshSources();
+  }
+  useStore.getState().closeTab(tableId);
 }
 
 /** Saves all dirty tables. Returns false if one of them was not saved. */

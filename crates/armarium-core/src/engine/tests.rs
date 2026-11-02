@@ -11,6 +11,8 @@ fn env() -> Env {
     let cfg = EngineConfig {
         workspace_path: dir.path().join("cfg").join("workspace.json"),
         temp_dir: dir.path().join("tmp"),
+        scratch_root: dir.path().join("scratch"),
+        scratch_idle: Duration::ZERO,
         ..EngineConfig::default()
     };
     let engine = Engine::new(cfg, Arc::new(NoEvents)).unwrap();
@@ -660,14 +662,18 @@ fn diff_and_export() {
     let StatementResult::Rows { result_id, .. } = &run.results[0] else {
         panic!()
     };
-    let saved = e.dir.path().join("result.csv");
-    let sid = e
+    let scratch = e.engine.save_result_as_scratch(*result_id).unwrap();
+    assert_eq!(scratch.sql_name, "scratch_01");
+    let src = e
         .engine
-        .save_result_as_source(*result_id, &saved, ExportFormat::for_path(&saved))
+        .list_sources()
+        .unwrap()
+        .into_iter()
+        .find(|s| s.id == scratch.source_id)
         .unwrap();
-    assert!(!sid.is_empty());
-    let text = std::fs::read_to_string(&saved).unwrap();
-    assert_eq!(text, "\u{feff}v,x\r\nd,6.0\r\nc,4.5\r\nB,3.0\r\n");
+    assert!(src.scratch);
+    let text = std::fs::read_to_string(&src.path).unwrap();
+    assert_eq!(text, "v,x\nd,6.0\nc,4.5\nB,3.0\n");
 }
 
 #[test]
@@ -732,4 +738,242 @@ fn rename_and_remove_sources() {
     assert!(p.exists());
     let run = e.sql("SELECT * FROM renamed");
     assert!(run.error.is_some());
+}
+
+// ----- Scratch sources (04. Workspace, section 6) -----
+
+fn scratch_of(e: &Env, sql: &str) -> ScratchInfo {
+    let run = e.sql(sql);
+    let StatementResult::Rows { result_id, .. } = &run.results[0] else {
+        panic!("{:?}", run.results)
+    };
+    e.engine.save_result_as_scratch(*result_id).unwrap()
+}
+
+fn path_of(e: &Env, scratch: &ScratchInfo) -> PathBuf {
+    let src = e
+        .engine
+        .list_sources()
+        .unwrap()
+        .into_iter()
+        .find(|s| s.id == scratch.source_id)
+        .unwrap();
+    PathBuf::from(src.path)
+}
+
+fn scratch_env() -> (Env, ScratchInfo) {
+    let e = env();
+    let p = e.file("d.csv", b"id,v\n1,a\n2,b\n3,c\n");
+    e.add(&p);
+    let sc = scratch_of(&e, "SELECT id, v FROM d ORDER BY id");
+    (e, sc)
+}
+
+#[test]
+fn scratch_names_grow_and_are_queryable() {
+    let (e, first) = scratch_env();
+    assert_eq!(first.sql_name, "scratch_01");
+    let second = scratch_of(&e, "SELECT id FROM scratch_01 WHERE id > 1");
+    assert_eq!(second.sql_name, "scratch_02");
+    e.engine.open_table(second.table_id).unwrap();
+    let rows = e.rows(second.table_id);
+    assert_eq!(rows.len(), 2);
+    let dir = path_of(&e, &first).parent().unwrap().to_path_buf();
+    assert!(dir.starts_with(e.dir.path().join("scratch")));
+    assert!(dir.join("scratch_02.csv").is_file());
+}
+
+#[test]
+fn scratch_numbers_are_not_used_again() {
+    let (e, first) = scratch_env();
+    let path1 = path_of(&e, &first);
+    e.engine.remove_source(&first.source_id).unwrap();
+    assert!(!path1.exists());
+    let second = scratch_of(&e, "SELECT id FROM d");
+    assert_eq!(second.sql_name, "scratch_02");
+
+    // A new engine on the same workspace file continues the numbers.
+    let cfg = EngineConfig {
+        workspace_path: e.engine.workspace_path(),
+        temp_dir: e.dir.path().join("tmp2"),
+        scratch_root: e.dir.path().join("scratch"),
+        scratch_idle: Duration::ZERO,
+        ..EngineConfig::default()
+    };
+    let engine2 = Engine::new(cfg, Arc::new(NoEvents)).unwrap();
+    let run = engine2.run_sql("SELECT id FROM d", &SqlOptions::default());
+    let StatementResult::Rows { result_id, .. } = &run.results[0] else {
+        panic!()
+    };
+    let third = engine2.save_result_as_scratch(*result_id).unwrap();
+    assert_eq!(third.sql_name, "scratch_03");
+}
+
+#[test]
+fn failed_result_leaves_no_scratch_file() {
+    let e = env();
+    assert!(e.engine.save_result_as_scratch(999).is_err());
+    assert!(e.engine.list_sources().unwrap().is_empty());
+    let root = e.dir.path().join("scratch");
+    let files: Vec<_> = walk(&root);
+    assert!(files.is_empty(), "{files:?}");
+}
+
+fn walk(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for entry in rd.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                out.extend(walk(&p));
+            } else {
+                out.push(p);
+            }
+        }
+    }
+    out
+}
+
+fn set_v(e: &Env, t: TableId, value: &str) {
+    let page = e.engine.fetch_rows(t, None, 0, 10).unwrap();
+    e.engine
+        .apply_edit(
+            t,
+            EditOp::SetCells {
+                cells: vec![CellEdit {
+                    rid: page.rids[0],
+                    column: "v".into(),
+                    value: s(value),
+                }],
+            },
+        )
+        .unwrap();
+}
+
+#[test]
+fn scratch_tables_are_saved_automatically() {
+    let (e, sc) = scratch_env();
+    let path = path_of(&e, &sc);
+    e.engine.open_table(sc.table_id).unwrap();
+    set_v(&e, sc.table_id, "X");
+    assert!(e.engine.table_meta(sc.table_id).unwrap().dirty);
+    // The exit dialog does not list a scratch table.
+    assert!(e.engine.dirty_tables().unwrap().is_empty());
+    assert_eq!(e.engine.autosave_scratch().unwrap(), vec![sc.table_id]);
+    assert!(!e.engine.table_meta(sc.table_id).unwrap().dirty);
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "id,v\n1,X\n2,b\n3,c\n"
+    );
+}
+
+#[test]
+fn scratch_autosave_waits_for_the_idle_time() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = EngineConfig {
+        workspace_path: dir.path().join("cfg").join("workspace.json"),
+        temp_dir: dir.path().join("tmp"),
+        scratch_root: dir.path().join("scratch"),
+        scratch_idle: Duration::from_millis(150),
+        ..EngineConfig::default()
+    };
+    let engine = Engine::new(cfg, Arc::new(NoEvents)).unwrap();
+    let csv = dir.path().join("d.csv");
+    std::fs::write(&csv, "id,v\n1,a\n").unwrap();
+    engine.add_sources(&[csv]).unwrap();
+    let run = engine.run_sql("SELECT id, v FROM d", &SqlOptions::default());
+    let StatementResult::Rows { result_id, .. } = &run.results[0] else {
+        panic!()
+    };
+    let sc = engine.save_result_as_scratch(*result_id).unwrap();
+    engine.open_table(sc.table_id).unwrap();
+    let page = engine.fetch_rows(sc.table_id, None, 0, 10).unwrap();
+    engine
+        .apply_edit(
+            sc.table_id,
+            EditOp::SetCells {
+                cells: vec![CellEdit {
+                    rid: page.rids[0],
+                    column: "v".into(),
+                    value: s("X"),
+                }],
+            },
+        )
+        .unwrap();
+    assert!(engine.autosave_scratch().unwrap().is_empty());
+    std::thread::sleep(Duration::from_millis(250));
+    assert_eq!(engine.autosave_scratch().unwrap(), vec![sc.table_id]);
+}
+
+#[test]
+fn scratch_autosave_failure_makes_the_table_dirty() {
+    let (e, sc) = scratch_env();
+    let path = path_of(&e, &sc);
+    e.engine.open_table(sc.table_id).unwrap();
+    // Another program changes the file.
+    std::fs::write(&path, "id,v\n1,other\n").unwrap();
+    set_v(&e, sc.table_id, "X");
+    assert!(e.engine.autosave_scratch().unwrap().is_empty());
+    let info = e.engine.table_info(sc.table_id).unwrap();
+    assert!(info.auto_save_failed);
+    assert_eq!(e.engine.dirty_tables().unwrap().len(), 1);
+    // The file is not overwritten.
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "id,v\n1,other\n");
+}
+
+#[test]
+fn scratch_save_as_moves_the_file() {
+    let (e, sc) = scratch_env();
+    let old = path_of(&e, &sc);
+    e.engine.open_table(sc.table_id).unwrap();
+    set_v(&e, sc.table_id, "X");
+    let target = e.dir.path().join("kept.csv");
+    e.engine.save_table_as(sc.table_id, &target, None).unwrap();
+    assert!(target.is_file());
+    assert!(!old.exists());
+    let src = e
+        .engine
+        .list_sources()
+        .unwrap()
+        .into_iter()
+        .find(|s| s.id == sc.source_id)
+        .unwrap();
+    assert!(!src.scratch);
+    assert_eq!(PathBuf::from(&src.path), target);
+    // The SQL name does not change.
+    assert_eq!(src.tables[0].sql_name, "scratch_01");
+    assert!(std::fs::read_to_string(&target).unwrap().contains("1,X"));
+    // The source is a normal source now: removing it keeps the file.
+    e.engine.remove_source(&sc.source_id).unwrap();
+    assert!(target.is_file());
+}
+
+#[test]
+fn scratch_delete_removes_the_file_and_relocate_is_refused() {
+    let (e, sc) = scratch_env();
+    let path = path_of(&e, &sc);
+    let other = e.file("o.csv", b"a\n1\n");
+    let err = e.engine.relocate_source(&sc.source_id, &other).unwrap_err();
+    assert_eq!(err.code(), "INVALID_ARGUMENT");
+    e.engine.remove_source(&sc.source_id).unwrap();
+    assert!(!path.exists());
+    assert!(other.is_file());
+}
+
+#[test]
+fn scratch_cleanup_deletes_only_unregistered_scratch_files() {
+    let (e, sc) = scratch_env();
+    let path = path_of(&e, &sc);
+    let dir = path.parent().unwrap();
+    let orphan = dir.join("scratch_09.csv");
+    let temp = dir.join(".scratch_10.csv.armarium-1-x.tmp");
+    let other = dir.join("notes.csv");
+    for p in [&orphan, &temp, &other] {
+        std::fs::write(p, "a\n").unwrap();
+    }
+    assert_eq!(e.engine.cleanup_scratch().unwrap(), 2);
+    assert!(!orphan.exists());
+    assert!(!temp.exists());
+    assert!(other.exists());
+    assert!(path.exists());
 }
