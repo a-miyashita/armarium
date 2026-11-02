@@ -99,7 +99,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "armarium"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "armarium-core",
  "notify",
@@ -115,7 +115,7 @@ dependencies = [
 
 [[package]]
 name = "armarium-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "calamine",
  "chardetng",
@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "armarium-mcp"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "armarium-core",
